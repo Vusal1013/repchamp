@@ -1,18 +1,15 @@
+import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import '../../core/theme/app_colors.dart';
 import '../../models/exercise_type.dart';
 import '../../providers/duel_provider.dart';
 import '../../providers/pose_detection_provider.dart';
 import '../../providers/rep_counter_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../widgets/camera/camera_preview_widget.dart';
-import '../../widgets/common/duel_progress_bar.dart';
-import '../../widgets/common/countdown_timer_widget.dart';
-import '../../widgets/common/rep_counter_display.dart';
+import '../../widgets/common/fit_duel_bottom_nav.dart';
 
 class DuelScreen extends ConsumerStatefulWidget {
   const DuelScreen({super.key});
@@ -21,13 +18,53 @@ class DuelScreen extends ConsumerStatefulWidget {
   ConsumerState<DuelScreen> createState() => _DuelScreenState();
 }
 
-class _DuelScreenState extends ConsumerState<DuelScreen> {
+class _DuelScreenState extends ConsumerState<DuelScreen>
+    with SingleTickerProviderStateMixin {
   bool _duelActive = false;
+  int _remainingSeconds = 60;
+  Timer? _countdownTimer;
+  late AnimationController _skeletonAnim;
+  double _skeletonOpacity = 0.5;
+  Timer? _skeletonTimer;
 
   @override
   void initState() {
     super.initState();
+    _skeletonAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    )..repeat();
+
+    _skeletonTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
+      setState(() {
+        _skeletonOpacity = 0.2 + 0.4 * (_skeletonAnim.value);
+      });
+    });
+
     _setupDuel();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_remainingSeconds <= 10) {
+        setState(() => _remainingSeconds--);
+      } else {
+        setState(() => _remainingSeconds--);
+      }
+      if (_remainingSeconds <= 0) {
+        _countdownTimer?.cancel();
+        _onTimerEnd();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _skeletonAnim.dispose();
+    _skeletonTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _setupDuel() async {
@@ -92,13 +129,8 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
     }
   }
 
-  void _giveUp() {
-    _onTimerEnd();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final myPlayer = ref.watch(myDuelPlayerProvider);
     final opponentPlayer = ref.watch(opponentPlayerProvider);
     final repState = ref.watch(repCounterProvider);
 
@@ -111,77 +143,147 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
 
     _syncReps();
 
+    final total = (myReps + opponentReps).toDouble();
+    final myFraction = total > 0 ? myReps / total : 0.5;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // Camera feed
           const CameraPreviewWidget(),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withAlpha(180),
-                  Colors.transparent,
-                  Colors.transparent,
-                  Colors.black.withAlpha(180),
-                ],
+
+          // Skeleton overlay
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _SkeletonPainter(opacity: _skeletonOpacity),
               ),
             ),
           ),
-          Positioned(
-            top: 50,
-            left: 16,
-            right: 16,
-            child: DuelProgressBar(
-              myReps: myReps,
-              opponentReps: opponentReps,
-              myUsername: 'You',
-              opponentUsername: opponentPlayer?.username ?? 'Opponent',
+
+          // Scanline
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: _ScanlineOverlay(),
             ),
           ),
-          Positioned(
-            top: 100,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: CountdownTimerWidget(
-                durationSeconds: 60,
-                onTimerEnd: _onTimerEnd,
-              ),
-            ),
-          ),
-          Center(
-            child: RepCounterDisplay(repCount: myReps),
-          ),
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: _giveUp,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.redAccent, width: 2),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Text(
-                    'GIVE UP',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 3,
-                    ),
+
+          // Gradient vignette
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withAlpha(180),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.black.withAlpha(180),
+                    ],
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          // Header
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: _buildHeader(),
+          ),
+
+          // Battle bar
+          Positioned(
+            top: 72, left: 20, right: 20,
+            child: _buildBattleBar(myFraction, opponentReps),
+          ),
+
+          // Middle stats
+          Positioned(
+            top: 136, left: 20, right: 20,
+            child: _buildMiddleStats(myReps, opponentReps),
+          ),
+
+          // Bottom biometrics
+          Positioned(
+            bottom: 96, left: 20, right: 20,
+            child: _buildBiometrics(),
+          ),
+
+          // Floating message
+          Positioned(
+            bottom: 168, left: 0, right: 0,
+            child: _buildFloatingMessage(myReps, opponentReps),
+          ),
+
+          // Bottom nav
+          const Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: FitDuelBottomNav(activeTab: NavTab.duel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Header ──────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: const BoxDecoration(
+        color: Color(0xFF131313),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF353534)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF00E556), width: 2),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: const Icon(Icons.person, size: 18, color: Color(0xFF00E556)),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'FITDUEL',
+                style: TextStyle(
+                  fontFamily: 'ArchivoNarrow',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.01,
+                  color: const Color(0xFF6CFF80),
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF201F1F),
+              borderRadius: BorderRadius.circular(9999),
+              border: Border.all(color: const Color(0xFF353534)),
+            ),
+            child: Text(
+              '12🔥',
+              style: TextStyle(
+                fontFamily: 'SpaceMono',
+                fontSize: 12,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF6CFF80),
               ),
             ),
           ),
@@ -189,4 +291,544 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
       ),
     );
   }
+
+  // ─── Battle Bar ──────────────────────────────────
+  Widget _buildBattleBar(double myFraction, int opponentReps) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFF201F1F).withAlpha(102),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withAlpha(26)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          children: [
+            // Green bar (YOU)
+            Positioned(
+              left: 0, top: 0, bottom: 0,
+              child: FractionallySizedBox(
+                widthFactor: myFraction,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0x3300E556), Color(0xFF6CFF80)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF39FF6A).withAlpha(77),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Blue bar (OPPONENT)
+            Positioned(
+              right: 0, top: 0, bottom: 0,
+              child: FractionallySizedBox(
+                widthFactor: 1.0 - myFraction,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF568DFF), Color(0x33568DFF)],
+                      begin: Alignment.centerRight,
+                      end: Alignment.centerLeft,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF568DFF).withAlpha(77),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // VS indicator
+            Positioned(
+              left: myFraction * MediaQuery.of(context).size.width - 40,
+              top: 0, bottom: 0,
+              child: FractionallySizedBox(
+                widthFactor: 1.0,
+                child: Center(
+                  child: Transform.translate(
+                    offset: Offset(myFraction > 0.5 ? -24 : 24, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF131313),
+                        border: Border.all(color: const Color(0xFFC70018)),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(128),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'VS',
+                        style: TextStyle(
+                          fontFamily: 'SpaceMono',
+                          fontSize: 12,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Labels
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'YOU',
+                      style: TextStyle(
+                        fontFamily: 'SpaceMono',
+                        fontSize: 12,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF007226),
+                      ),
+                    ),
+                    Text(
+                      'ALEX_X',
+                      style: TextStyle(
+                        fontFamily: 'SpaceMono',
+                        fontSize: 12,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF002661),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Middle Stats ────────────────────────────────
+  Widget _buildMiddleStats(int myReps, int opponentReps) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Your stats
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildGlassLabel('MY REPS', const Color(0xFF6CFF80), false),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  '$myReps',
+                  style: TextStyle(
+                    fontFamily: 'ArchivoNarrow',
+                    fontSize: 64,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.04,
+                    color: const Color(0xFF6CFF80),
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFF39FF6A).withAlpha(128),
+                        blurRadius: 15,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '/ 50',
+                  style: TextStyle(
+                    fontFamily: 'SpaceMono',
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF00E556),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // Countdown center
+        Column(
+          children: [
+            _buildTimer(),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(4, (i) {
+                return Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i < 2
+                        ? const Color(0xFF6CFF80)
+                        : const Color(0xFF353534),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+
+        // Opponent stats
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildGlassLabel('OPPONENT', const Color(0xFF568DFF), true),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  'REPS',
+                  style: TextStyle(
+                    fontFamily: 'SpaceMono',
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFB0C6FF),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$opponentReps',
+                  style: TextStyle(
+                    fontFamily: 'ArchivoNarrow',
+                    fontSize: 48,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF568DFF).withAlpha(204),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlassLabel(String text, Color color, bool right) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(13),
+        borderRadius: BorderRadius.circular(4),
+        border: Border(
+          left: right ? BorderSide.none : BorderSide(color: color, width: 4),
+          right: right ? BorderSide(color: color, width: 4) : BorderSide.none,
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'SpaceMono',
+          fontSize: 12,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  // ─── Timer ───────────────────────────────────────
+  Widget _buildTimer() {
+    final warning = _remainingSeconds <= 10;
+    final mins = _remainingSeconds ~/ 60;
+    final secs = _remainingSeconds % 60;
+    final display = '$mins:${secs.toString().padLeft(2, '0')}';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      decoration: BoxDecoration(
+        color: warning
+            ? Colors.red.withAlpha(26)
+            : const Color(0xFFC70018).withAlpha(26),
+        border: Border.all(
+          color: warning ? Colors.red : const Color(0xFFC70018),
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 300),
+        style: TextStyle(
+          fontFamily: 'ArchivoNarrow',
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 4,
+          color: warning ? Colors.red : const Color(0xFFC70018),
+        ),
+        child: Text(display),
+      ),
+    );
+  }
+
+  // ─── Biometrics ──────────────────────────────────
+  Widget _buildBiometrics() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(13),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC70018).withAlpha(51),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.favorite_rounded,
+                    color: const Color(0xFFC70018),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'HEART RATE',
+                      style: TextStyle(
+                        fontFamily: 'SpaceMono',
+                        fontSize: 10,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFBACBB6),
+                      ),
+                    ),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '164',
+                            style: TextStyle(
+                              fontFamily: 'ArchivoNarrow',
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFC70018),
+                            ),
+                          ),
+                          TextSpan(
+                            text: '  BPM',
+                            style: TextStyle(
+                              fontFamily: 'SpaceMono',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFBACBB6).withAlpha(153),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(13),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6CFF80).withAlpha(51),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.track_changes_rounded,
+                    color: const Color(0xFF6CFF80),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FORM ACCURACY',
+                      style: TextStyle(
+                        fontFamily: 'SpaceMono',
+                        fontSize: 10,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFBACBB6),
+                      ),
+                    ),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '98',
+                            style: TextStyle(
+                              fontFamily: 'ArchivoNarrow',
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF6CFF80),
+                            ),
+                          ),
+                          TextSpan(
+                            text: '  %',
+                            style: TextStyle(
+                              fontFamily: 'SpaceMono',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFBACBB6).withAlpha(153),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Floating Message ────────────────────────────
+  Widget _buildFloatingMessage(int myReps, int opponentReps) {
+    final diff = myReps - opponentReps;
+    if (diff <= 0) return const SizedBox.shrink();
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF6CFF80).withAlpha(230),
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Text(
+          'KEEP PACE! YOU\'RE LEADING BY $diff',
+          style: TextStyle(
+            fontFamily: 'SpaceMono',
+            fontSize: 12,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF002106),
+          ),
+        ),
+      ),
+    );
+  }
+
+}
+
+// ─── Scanline Overlay ────────────────────────────────
+class _ScanlineOverlay extends StatelessWidget {
+  const _ScanlineOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ScanlinePainter(),
+    );
+  }
+}
+
+class _ScanlinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (double y = 0; y < size.height; y += 4) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        Paint()
+          ..color = const Color(0xFF39FF6A).withAlpha(8)
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─── Skeleton Painter ─────────────────────────────────
+class _SkeletonPainter extends CustomPainter {
+  final double opacity;
+
+  _SkeletonPainter({required this.opacity});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF39FF6A).withAlpha((opacity * 128).round())
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+
+    final sx = size.width / 100;
+    final sy = size.height / 100;
+
+    // Mock joint connectors
+    final points = [
+      Offset(50 * sx, 30 * sy),
+      Offset(50 * sx, 50 * sy),
+      Offset(40 * sx, 70 * sy),
+      Offset(60 * sx, 70 * sy),
+      Offset(40 * sx, 40 * sy),
+      Offset(60 * sx, 40 * sy),
+    ];
+
+    // Center to hip
+    canvas.drawLine(points[0], points[1], paint);
+    // Hip to left leg
+    canvas.drawLine(points[1], points[2], paint);
+    // Hip to right leg
+    canvas.drawLine(points[1], points[3], paint);
+    // Shoulders
+    canvas.drawLine(points[4], points[5], paint);
+
+    // Dashed effect
+    paint.color = const Color(0xFF39FF6A).withAlpha((opacity * 60).round());
+    canvas.drawLine(points[4], points[0], paint);
+    canvas.drawLine(points[5], points[0], paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SkeletonPainter oldDelegate) =>
+      oldDelegate.opacity != opacity;
 }
