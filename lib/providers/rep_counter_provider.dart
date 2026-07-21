@@ -6,16 +6,23 @@ import '../services/rep_counter_engine.dart';
 class RepCounterState {
   final int repCount;
   final RepState currentState;
+  final String? formWarning;
 
   const RepCounterState({
     this.repCount = 0,
     this.currentState = RepState.unknown,
+    this.formWarning,
   });
 
-  RepCounterState copyWith({int? repCount, RepState? currentState}) {
+  RepCounterState copyWith({
+    int? repCount,
+    RepState? currentState,
+    String? formWarning,
+  }) {
     return RepCounterState(
       repCount: repCount ?? this.repCount,
       currentState: currentState ?? this.currentState,
+      formWarning: formWarning ?? this.formWarning,
     );
   }
 }
@@ -33,10 +40,14 @@ class RepCounterNotifier extends StateNotifier<RepCounterState> {
   void processPose(Pose pose) {
     if (_engine == null) return;
     final reps = _engine!.processPose(pose);
-    if (reps != state.repCount || _engine!.currentState != state.currentState) {
+    final formWarning = _engine!.checkForm(pose);
+    if (reps != state.repCount ||
+        _engine!.currentState != state.currentState ||
+        formWarning != state.formWarning) {
       state = RepCounterState(
         repCount: reps,
         currentState: _engine!.currentState,
+        formWarning: formWarning,
       );
     }
   }
@@ -47,6 +58,7 @@ class RepCounterNotifier extends StateNotifier<RepCounterState> {
   }
 
   int get repCount => state.repCount;
+  ExerciseType? get exerciseType => _engine?.exerciseType;
 }
 
 final repCounterProvider = StateNotifierProvider<RepCounterNotifier, RepCounterState>((ref) {
