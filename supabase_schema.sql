@@ -151,14 +151,17 @@ create index if not exists idx_friend_requests_from on friend_requests(from_user
 -- 3a. Profiles
 alter table profiles enable row level security;
 
+drop policy if exists "Profiles are viewable by everyone" on profiles;
 create policy "Profiles are viewable by everyone"
   on profiles for select
   using (true);
 
+drop policy if exists "Users can update their own profile" on profiles;
 create policy "Users can update their own profile"
   on profiles for update
   using (auth.uid() = id);
 
+drop policy if exists "Users can insert their own profile" on profiles;
 create policy "Users can insert their own profile"
   on profiles for insert
   with check (auth.uid() = id);
@@ -166,10 +169,12 @@ create policy "Users can insert their own profile"
 -- 3b. Workout sessions
 alter table workout_sessions enable row level security;
 
+drop policy if exists "Users can view their own workout sessions" on workout_sessions;
 create policy "Users can view their own workout sessions"
   on workout_sessions for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert their own workout sessions" on workout_sessions;
 create policy "Users can insert their own workout sessions"
   on workout_sessions for insert
   with check (auth.uid() = user_id);
@@ -177,14 +182,17 @@ create policy "Users can insert their own workout sessions"
 -- 3c. Duel rooms
 alter table duel_rooms enable row level security;
 
+drop policy if exists "Anyone can view duel rooms" on duel_rooms;
 create policy "Anyone can view duel rooms"
   on duel_rooms for select
   using (true);
 
+drop policy if exists "Authenticated users can create duel rooms" on duel_rooms;
 create policy "Authenticated users can create duel rooms"
   on duel_rooms for insert
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "Participants can update duel rooms" on duel_rooms;
 create policy "Participants can update duel rooms"
   on duel_rooms for update
   using (
@@ -198,6 +206,7 @@ create policy "Participants can update duel rooms"
 -- 3d. Duel players
 alter table duel_players enable row level security;
 
+drop policy if exists "Participants can view duel players in their room" on duel_players;
 create policy "Participants can view duel players in their room"
   on duel_players for select
   using (
@@ -208,10 +217,12 @@ create policy "Participants can view duel players in their room"
     )
   );
 
+drop policy if exists "Users can join a duel room" on duel_players;
 create policy "Users can join a duel room"
   on duel_players for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update their own duel player row" on duel_players;
 create policy "Users can update their own duel player row"
   on duel_players for update
   using (auth.uid() = user_id);
@@ -219,14 +230,17 @@ create policy "Users can update their own duel player row"
 -- 3e. Friendships
 alter table friendships enable row level security;
 
+drop policy if exists "Users can view their own friendships" on friendships;
 create policy "Users can view their own friendships"
   on friendships for select
   using (auth.uid() = user_id or auth.uid() = friend_id);
 
+drop policy if exists "Users can send friend requests" on friendships;
 create policy "Users can send friend requests"
   on friendships for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update friendships they are involved in" on friendships;
 create policy "Users can update friendships they are involved in"
   on friendships for update
   using (auth.uid() = user_id or auth.uid() = friend_id);
@@ -234,10 +248,12 @@ create policy "Users can update friendships they are involved in"
 -- 3f. Weekly challenges
 alter table weekly_challenges enable row level security;
 
+drop policy if exists "Challenges are viewable by everyone" on weekly_challenges;
 create policy "Challenges are viewable by everyone"
   on weekly_challenges for select
   using (true);
 
+drop policy if exists "Only admins can insert challenges" on weekly_challenges;
 create policy "Only admins can insert challenges"
   on weekly_challenges for insert
   with check (auth.role() = 'service_role');
@@ -245,14 +261,17 @@ create policy "Only admins can insert challenges"
 -- 3g. Challenge progress
 alter table challenge_progress enable row level security;
 
+drop policy if exists "Users can view their own challenge progress" on challenge_progress;
 create policy "Users can view their own challenge progress"
   on challenge_progress for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert their own challenge progress" on challenge_progress;
 create policy "Users can insert their own challenge progress"
   on challenge_progress for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update their own challenge progress" on challenge_progress;
 create policy "Users can update their own challenge progress"
   on challenge_progress for update
   using (auth.uid() = user_id);
@@ -260,10 +279,12 @@ create policy "Users can update their own challenge progress"
 -- 3h. User achievements
 alter table user_achievements enable row level security;
 
+drop policy if exists "Users can view own achievements" on user_achievements;
 create policy "Users can view own achievements"
   on user_achievements for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own achievements" on user_achievements;
 create policy "Users can insert own achievements"
   on user_achievements for insert
   with check (auth.uid() = user_id);
@@ -271,10 +292,12 @@ create policy "Users can insert own achievements"
 -- 3i. Streak history
 alter table streak_history enable row level security;
 
+drop policy if exists "Users can view own streak history" on streak_history;
 create policy "Users can view own streak history"
   on streak_history for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own streak history" on streak_history;
 create policy "Users can insert own streak history"
   on streak_history for insert
   with check (auth.uid() = user_id);
@@ -282,14 +305,17 @@ create policy "Users can insert own streak history"
 -- 3j. Friend requests
 alter table friend_requests enable row level security;
 
+drop policy if exists "Users can view their own friend requests" on friend_requests;
 create policy "Users can view their own friend requests"
   on friend_requests for select
   using (auth.uid() = from_user_id or auth.uid() = to_user_id);
 
+drop policy if exists "Users can send friend requests" on friend_requests;
 create policy "Users can send friend requests"
   on friend_requests for insert
   with check (auth.uid() = from_user_id);
 
+drop policy if exists "Users can update requests they received" on friend_requests;
 create policy "Users can update requests they received"
   on friend_requests for update
   using (auth.uid() = to_user_id);
@@ -303,11 +329,13 @@ insert into storage.buckets (id, name, public) values ('avatars', 'avatars', tru
 on conflict (id) do nothing;
 
 -- Avatar storage policy: herkes gorebilir
+drop policy if exists "Avatar images are publicly accessible" on storage;
 create policy "Avatar images are publicly accessible"
   on storage.objects for select
   using (bucket_id = 'avatars');
 
 -- Avatar storage policy: kullanici kendi avatarini yukleyebilir
+drop policy if exists "Users can upload their own avatar" on storage;
 create policy "Users can upload their own avatar"
   on storage.objects for insert
   with check (
