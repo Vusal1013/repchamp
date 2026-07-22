@@ -1,21 +1,23 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../models/exercise_type.dart';
+import '../../providers/duel_matchmaking_provider.dart';
+import '../../providers/duel_provider.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
-class DuelLobbyScreen extends StatefulWidget {
+class DuelLobbyScreen extends ConsumerStatefulWidget {
   const DuelLobbyScreen({super.key});
 
   @override
-  State<DuelLobbyScreen> createState() => _DuelLobbyScreenState();
+  ConsumerState<DuelLobbyScreen> createState() => _DuelLobbyScreenState();
 }
 
-class _DuelLobbyScreenState extends State<DuelLobbyScreen>
+class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
     with SingleTickerProviderStateMixin {
-  bool _matchFound = false;
-  int _countdown = 4;
-  Timer? _matchTimer;
-  Timer? _countdownTimer;
   late AnimationController _radarAnim;
+  Timer? _countdownTimer;
 
   @override
   void initState() {
@@ -24,36 +26,52 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
-
-    // Simulate match found after 3.5s
-    _matchTimer = Timer(const Duration(milliseconds: 3500), () {
-      setState(() => _matchFound = true);
-      _startCountdown();
-    });
-  }
-
-  void _startCountdown() {
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_countdown <= 1) {
-        t.cancel();
-        setState(() => _countdown = 0);
-        // GO! transition would happen here
-        return;
-      }
-      setState(() => _countdown--);
-    });
   }
 
   @override
   void dispose() {
-    _matchTimer?.cancel();
-    _countdownTimer?.cancel();
     _radarAnim.dispose();
+    _countdownTimer?.cancel();
+    ref.read(duelMatchmakingProvider.notifier).reset();
     super.dispose();
+  }
+
+  void _startMatchmaking() {
+    ref.read(duelMatchmakingProvider.notifier).startSearching(ExerciseType.pushUp);
+  }
+
+  void _startCountdown() {
+    ref.read(duelMatchmakingProvider.notifier).startCountdown();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final state = ref.read(duelMatchmakingProvider);
+      if (state.state == MatchmakingState.ready) {
+        _countdownTimer?.cancel();
+        context.push('/duel/active');
+        return;
+      }
+      ref.read(duelMatchmakingProvider.notifier).tickCountdown();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final matchState = ref.watch(duelMatchmakingProvider);
+    final opponent = ref.watch(opponentPlayerProvider);
+
+    // Auto-detect opponent found
+    if (matchState.state == MatchmakingState.searching && opponent != null) {
+      ref.read(duelMatchmakingProvider.notifier).onOpponentFound(opponent);
+    }
+
+    // Auto-start countdown when both found
+    if (matchState.state == MatchmakingState.found && matchState.opponent != null) {
+      Future.microtask(() {
+        if (ref.read(duelMatchmakingProvider).state == MatchmakingState.found) {
+          _startCountdown();
+        }
+      });
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: Stack(
@@ -63,7 +81,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
             child: IgnorePointer(
               child: Stack(
                 children: [
-                  // Pulse aura
                   Center(
                     child: AnimatedBuilder(
                       animation: _radarAnim,
@@ -84,38 +101,42 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                       },
                     ),
                   ),
-                  // Scanline
-                  const Positioned.fill(
-                    child: _ScanlineOverlay(),
-                  ),
+                  const Positioned.fill(child: _ScanlineOverlay()),
                 ],
               ),
             ),
           ),
-
-          // Content
           SafeArea(
             child: Column(
               children: [
-                // Header
                 _buildHeader(),
                 const Spacer(),
-                // Matchmaking header + radar
-                if (!_matchFound) _buildSearchingState(),
-                if (_matchFound) _buildMatchFoundState(),
+                if (matchState.state == MatchmakingState.idle)
+                  _buildIdleState(),
+                if (matchState.state == MatchmakingState.searching)
+                  _buildSearchingState(),
+                if (matchState.state == MatchmakingState.found ||
+                    matchState.state == MatchmakingState.countdown)
+                  _buildMatchFoundState(matchState),
+                if (matchState.error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      matchState.error!,
+                      style: const TextStyle(color: Color(0xFFFFB4AB)),
+                    ),
+                  ),
                 const Spacer(),
-                // Bottom button
-                if (!_matchFound) _buildInviteButton(),
-                if (_matchFound) const SizedBox(height: 300),
+                if (matchState.state == MatchmakingState.idle)
+                  _buildStartButton(),
+                if (matchState.state == MatchmakingState.searching)
+                  _buildCancelButton(),
+                const SizedBox(height: 80),
               ],
             ),
           ),
-
-          // Bottom nav
           const Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: FitDuelBottomNav(activeTab: NavTab.duel),
           ),
         ],
@@ -123,20 +144,16 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
     );
   }
 
-  // ─── Header ──────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: const BoxDecoration(
         color: Color(0xFF131313),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFF353534)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFF353534))),
       ),
       child: Row(
         children: [
-          // Avatar + username
           Row(
             children: [
               Container(
@@ -162,7 +179,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
             ],
           ),
           const Spacer(),
-          // Title
           Text(
             'FITDUEL',
             style: TextStyle(
@@ -174,7 +190,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
             ),
           ),
           const Spacer(),
-          // Streak
           Text(
             '12🔥',
             style: TextStyle(
@@ -190,12 +205,56 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
     );
   }
 
-  // ─── Searching State ──────────────────────────────
+  Widget _buildIdleState() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'FIND A DUEL',
+          style: TextStyle(
+            fontFamily: 'ArchivoNarrow',
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.01,
+            color: const Color(0xFFE5E2E1),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Challenge another player\nto a real-time fitness duel',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'SpaceMono',
+            fontSize: 12,
+            letterSpacing: 1.2,
+            color: const Color(0xFFBACBB6),
+          ),
+        ),
+        const SizedBox(height: 48),
+        SizedBox(
+          width: 120,
+          height: 120,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF353534)),
+              color: const Color(0xFF1C1B1B),
+            ),
+            child: const Icon(
+              Icons.sports_kabaddi_rounded,
+              color: Color(0xFF6CFF80),
+              size: 56,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSearchingState() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Status text
         Text(
           'MATCHMAKING ACTIVE',
           style: TextStyle(
@@ -218,17 +277,14 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
           ),
         ),
         const SizedBox(height: 48),
-        // Radar animation
         SizedBox(
           width: 256,
           height: 256,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Pulsing outer rings
               _pulsingRing(1.0, const Color(0xFF568DFF).withAlpha(40)),
               _pulsingRing(0.85, const Color(0xFF39FF6A).withAlpha(30)),
-              // Rotating sweep (conic gradient)
               AnimatedBuilder(
                 animation: _radarAnim,
                 builder: (_, __) {
@@ -253,32 +309,27 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                   );
                 },
               ),
-              // Static rings
               Container(
-                width: 256,
-                height: 256,
+                width: 256, height: 256,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF353534)),
                 ),
               ),
               Container(
-                width: 192,
-                height: 192,
+                width: 192, height: 192,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF353534).withAlpha(128)),
                 ),
               ),
               Container(
-                width: 128,
-                height: 128,
+                width: 128, height: 128,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF353534).withAlpha(80)),
                 ),
               ),
-              // Center icon
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -325,8 +376,7 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
     );
   }
 
-  // ─── Match Found State ───────────────────────────
-  Widget _buildMatchFoundState() {
+  Widget _buildMatchFoundState(DuelMatchmakingState matchState) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -352,24 +402,15 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
           ),
         ),
         const SizedBox(height: 24),
-        // Opponent card
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 1.0, end: 0.0),
-          duration: const Duration(milliseconds: 600),
-          curve: const Cubic(0.16, 1.0, 0.3, 1.0),
-          builder: (_, value, child) {
-            return Transform.translate(
-              offset: Offset(0, value * 200),
-              child: Opacity(opacity: 1.0 - value, child: child),
-            );
-          },
-          child: _buildOpponentCard(),
-        ),
+        _buildOpponentCard(matchState),
       ],
     );
   }
 
-  Widget _buildOpponentCard() {
+  Widget _buildOpponentCard(DuelMatchmakingState matchState) {
+    final opponent = matchState.opponent;
+    final opponentName = opponent?.username ?? 'NeonRival';
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
@@ -388,7 +429,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Top row: name + level
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -407,7 +447,7 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'NeonRival',
+                      opponentName,
                       style: TextStyle(
                         fontFamily: 'ArchivoNarrow',
                         fontSize: 24,
@@ -436,10 +476,8 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
               ],
             ),
             const SizedBox(height: 16),
-            // Opponent avatar + stats
             Row(
               children: [
-                // Avatar
                 Stack(
                   children: [
                     Container(
@@ -453,8 +491,7 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                       child: const Icon(Icons.person, size: 40, color: Color(0xFF568DFF)),
                     ),
                     Positioned(
-                      bottom: -4,
-                      right: -4,
+                      bottom: -4, right: -4,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(
@@ -475,7 +512,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                   ],
                 ),
                 const SizedBox(width: 16),
-                // Stats
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +580,6 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
               ],
             ),
             const SizedBox(height: 16),
-            // Preparing match status
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -584,7 +619,7 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
                     ],
                   ),
                   Text(
-                    '${_countdown}s',
+                    '${matchState.countdown}s',
                     style: TextStyle(
                       fontFamily: 'SpaceMono',
                       fontSize: 12,
@@ -602,32 +637,60 @@ class _DuelLobbyScreenState extends State<DuelLobbyScreen>
     );
   }
 
-  // ─── Invite Button ────────────────────────────────
-  Widget _buildInviteButton() {
+  Widget _buildStartButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: OutlinedButton.icon(
-        onPressed: () {},
-        icon: const Icon(Icons.person_add_rounded, size: 18),
-        label: Text(
-          'INVITE A FRIEND',
-          style: TextStyle(
-            fontFamily: 'SpaceMono',
-            fontSize: 12,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w700,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _startMatchmaking,
+          icon: const Icon(Icons.search_rounded, size: 20),
+          label: Text(
+            'FIND MATCH',
+            style: TextStyle(
+              fontFamily: 'SpaceMono',
+              fontSize: 14,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF568DFF),
-          side: const BorderSide(color: Color(0xFF568DFF), width: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF6CFF80),
+            foregroundColor: const Color(0xFF00390F),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildCancelButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton(
+          onPressed: () => ref.read(duelMatchmakingProvider.notifier).reset(),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFFFB4AB),
+            side: BorderSide(color: const Color(0xFFFFB4AB).withAlpha(128)),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(
+            'CANCEL',
+            style: TextStyle(
+              fontFamily: 'SpaceMono',
+              fontSize: 14,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Scanline Overlay ────────────────────────────────
@@ -636,9 +699,7 @@ class _ScanlineOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ScanlinePainter(),
-    );
+    return CustomPaint(painter: _ScanlinePainter());
   }
 }
 

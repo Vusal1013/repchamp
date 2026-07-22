@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:go_router/go_router.dart';
 
 class DuelResultScreen extends StatefulWidget {
   const DuelResultScreen({super.key});
@@ -17,6 +18,11 @@ class _DuelResultScreenState extends State<DuelResultScreen>
   double _xpProgress = 0.0;
   bool _showLevelAlert = false;
 
+  bool _won = true;
+  int _myReps = 54;
+  int _opponentReps = 48;
+  String _opponentName = 'ALEX_X';
+
   @override
   void initState() {
     super.initState();
@@ -25,6 +31,16 @@ class _DuelResultScreenState extends State<DuelResultScreen>
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
     _floatCurve = CurvedAnimation(parent: _floatAnim, curve: Curves.easeInOut);
+
+    final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
+    if (extra != null) {
+      final myId = extra['my_user_id'] as String?;
+      final winnerId = extra['winner_id'] as String?;
+      _won = winnerId == null || myId == null || winnerId == myId;
+      _myReps = extra['my_reps'] as int? ?? 54;
+      _opponentReps = extra['opponent_reps'] as int? ?? 48;
+      _opponentName = extra['opponent_name'] as String? ?? 'ALEX_X';
+    }
 
     Future.delayed(const Duration(milliseconds: 500), () {
       setState(() => _xpProgress = 1.0);
@@ -175,9 +191,9 @@ class _DuelResultScreenState extends State<DuelResultScreen>
               child: child,
             );
           },
-          child: Text(
-            'VICTORY',
-            style: TextStyle(
+              child: Text(
+                    _won ? 'VICTORY' : 'DEFEAT',
+                    style: TextStyle(
               fontFamily: 'ArchivoNarrow',
               fontSize: 64,
               fontWeight: FontWeight.w700,
@@ -270,7 +286,7 @@ class _DuelResultScreenState extends State<DuelResultScreen>
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          '54',
+                          '$_myReps',
                           style: TextStyle(
                             fontFamily: 'ArchivoNarrow',
                             fontSize: 64,
@@ -297,13 +313,13 @@ class _DuelResultScreenState extends State<DuelResultScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'OPPONENT',
+                      _opponentName.toUpperCase(),
                       style: TextStyle(
                         fontFamily: 'SpaceMono',
                         fontSize: 12,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFFBACBB6),
+                        color: const Color(0xFF568DFF),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -312,7 +328,7 @@ class _DuelResultScreenState extends State<DuelResultScreen>
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          '48',
+                          '$_opponentReps',
                           style: TextStyle(
                             fontFamily: 'ArchivoNarrow',
                             fontSize: 24,
@@ -568,7 +584,7 @@ class _DuelResultScreenState extends State<DuelResultScreen>
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => context.go('/duel/lobby'),
             icon: const Icon(Icons.restart_alt_rounded, size: 20),
             label: Text(
               'REMATCH',
@@ -592,7 +608,11 @@ class _DuelResultScreenState extends State<DuelResultScreen>
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Share coming soon')),
+              );
+            },
             icon: const Icon(Icons.share_rounded, size: 20),
             label: Text(
               'SHARE RESULT',
@@ -643,10 +663,10 @@ class _DuelResultScreenState extends State<DuelResultScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navItem(Icons.home_rounded, false, () {}),
-              _navItem(Icons.leaderboard_rounded, true, () {}),
-              _navItem(Icons.fitness_center_rounded, false, () {}),
-              _navItem(Icons.person_rounded, false, () {}),
+              _navItem(Icons.home_rounded, false, () => context.go('/home')),
+              _navItem(Icons.leaderboard_rounded, true, () => context.go('/leaderboard')),
+              _navItem(Icons.fitness_center_rounded, false, () => context.go('/duel/lobby')),
+              _navItem(Icons.person_rounded, false, () => context.go('/profile')),
             ],
           ),
         ),

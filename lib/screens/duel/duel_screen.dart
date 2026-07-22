@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../../models/duel_model.dart';
 import '../../models/exercise_type.dart';
 import '../../providers/duel_provider.dart';
 import '../../providers/pose_detection_provider.dart';
@@ -199,7 +200,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
           // Battle bar
           Positioned(
             top: 72, left: 20, right: 20,
-            child: _buildBattleBar(myFraction, opponentReps),
+            child: _buildBattleBar(myFraction, opponentReps, opponentPlayer),
           ),
 
           // Middle stats
@@ -293,7 +294,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
   }
 
   // ─── Battle Bar ──────────────────────────────────
-  Widget _buildBattleBar(double myFraction, int opponentReps) {
+  Widget _buildBattleBar(double myFraction, int opponentReps, DuelPlayer? opponentPlayer) {
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -404,7 +405,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
                       ),
                     ),
                     Text(
-                      'ALEX_X',
+                      opponentPlayer?.username?.toUpperCase() ?? 'RIVAL',
                       style: TextStyle(
                         fontFamily: 'SpaceMono',
                         fontSize: 12,

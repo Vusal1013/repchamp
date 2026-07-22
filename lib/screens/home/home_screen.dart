@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -11,7 +12,7 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
@@ -22,7 +23,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     _buildStatsRow(),
                     const SizedBox(height: 24),
-                    _buildQuickActions(),
+                    _buildQuickActions(context),
                     const SizedBox(height: 24),
                     _buildWeeklyProgress(),
                     const SizedBox(height: 24),
@@ -39,7 +40,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // ─── Header ──────────────────────────────────────
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -90,6 +91,19 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          GestureDetector(
+            onTap: () => context.push('/friends'),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF201F1F),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF353534)),
+              ),
+              child: const Icon(Icons.people_rounded, color: Color(0xFF6CFF80), size: 20),
+            ),
+          ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
@@ -193,7 +207,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // ─── Quick Actions ───────────────────────────────
-  Widget _buildQuickActions() {
+  Widget _buildQuickActions(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -212,11 +226,11 @@ class HomeScreen extends StatelessWidget {
         ),
         Row(
           children: [
-            Expanded(child: _actionCard('SOLO\nWORKOUT', Icons.person_rounded, 'Start training', () {})),
+            Expanded(child: _actionCard('SOLO\nWORKOUT', Icons.person_rounded, 'Start training', () => context.push('/workout/select'))),
             const SizedBox(width: 12),
-            Expanded(child: _actionCard('QUICK\nDUEL', Icons.sports_kabaddi_rounded, 'Challenge', () {})),
+            Expanded(child: _actionCard('QUICK\nDUEL', Icons.sports_kabaddi_rounded, 'Challenge', () => context.push('/duel/lobby'))),
             const SizedBox(width: 12),
-            Expanded(child: _actionCard('LEADER-\nBOARD', Icons.leaderboard_rounded, 'Rankings', () {})),
+            Expanded(child: _actionCard('CHALLENGES', Icons.emoji_events_rounded, 'Weekly', () => context.push('/challenges'))),
           ],
         ),
       ],
