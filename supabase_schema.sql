@@ -323,25 +323,33 @@ create policy "Users can update requests they received"
 -- ============================================================
 -- 4. STORAGE (Avatar yuklemeleri icin)
 -- ============================================================
+-- Not: Bu kısım Supabase Storage eklentisi kurulu değilse çalışmaz.
+-- Hata alırsan Supabase Dashboard > Storage'dan 'avatars' bucket'ını manuel oluştur.
 
--- Bucket: avatars
-insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true)
-on conflict (id) do nothing;
+do $$
+begin
+  -- Bucket: avatars
+  insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true)
+  on conflict (id) do nothing;
 
--- Avatar storage policy: herkes gorebilir
-drop policy if exists "Avatar images are publicly accessible" on storage;
-create policy "Avatar images are publicly accessible"
-  on storage.objects for select
-  using (bucket_id = 'avatars');
+  -- Avatar storage policy: herkes gorebilir
+  execute 'drop policy if exists "Avatar images are publicly accessible" on storage.objects';
+  execute 'create policy "Avatar images are publicly accessible"
+    on storage.objects for select
+    using (bucket_id = ''avatars'')';
 
--- Avatar storage policy: kullanici kendi avatarini yukleyebilir
-drop policy if exists "Users can upload their own avatar" on storage;
-create policy "Users can upload their own avatar"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'avatars'
-    and auth.uid()::text = (storage.foldername(name))[1]
-  );
+  -- Avatar storage policy: kullanici kendi avatarini yukleyebilir
+  execute 'drop policy if exists "Users can upload their own avatar" on storage.objects';
+  execute 'create policy "Users can upload their own avatar"
+    on storage.objects for insert
+    with check (
+      bucket_id = ''avatars''
+      and auth.uid()::text = (storage.foldername(name))[1]
+    )';
+exception when others then
+  raise notice 'Storage section skipped: %', SQLERRM;
+end;
+$$;
 
 -- ============================================================
 -- 5. FUNCTIONS (RPC)
@@ -458,6 +466,23 @@ create trigger on_auth_user_created
 -- ============================================================
 
 -- Duel odalari icin realtime aktif et
-alter publication supabase_realtime add table duel_rooms;
-alter publication supabase_realtime add table duel_players;
-alter publication supabase_realtime add table challenge_progress;
+do $$
+begin
+  alter publication supabase_realtime add table duel_rooms;
+exception when others then raise notice 'duel_rooms zaten publication içinde';
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table duel_players;
+exception when others then raise notice 'duel_players zaten publication içinde';
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table challenge_progress;
+exception when others then raise notice 'challenge_progress zaten publication içinde';
+end;
+$$;
