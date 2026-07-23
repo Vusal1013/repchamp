@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -17,34 +18,17 @@ import 'screens/friends/friends_screen.dart';
 import 'screens/leaderboard/leaderboard_screen.dart';
 import 'screens/profile/profile_screen.dart';
 
-class _AuthGuard extends ConsumerWidget {
-  final Widget child;
-
-  const _AuthGuard({required this.child});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isAuthenticated = ref.watch(isAuthenticatedProvider);
-
-    if (!isAuthenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.go('/login');
-      });
-      return const Scaffold(
-        backgroundColor: Color(0xFF131313),
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
-        ),
-      );
-    }
-
-    return child;
-  }
-}
+final _publicRoutes = <String>{'/login', '/signup'};
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/login',
   redirect: (context, state) {
+    final session = Supabase.instance.client.auth.currentSession;
+    final isLoggedIn = session != null;
+    final location = state.uri.toString();
+
+    if (isLoggedIn && _publicRoutes.contains(location)) return '/home';
+    if (!isLoggedIn && !_publicRoutes.contains(location)) return '/login';
     return null;
   },
   routes: [
@@ -52,47 +36,47 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/signup', builder: (_, __) => const SignupScreen()),
     GoRoute(
       path: '/home',
-      builder: (_, __) => const _AuthGuard(child: HomeScreen()),
+      builder: (_, __) => const HomeScreen(),
     ),
     GoRoute(
       path: '/workout/select',
-      builder: (_, __) => const _AuthGuard(child: ExerciseSelectScreen()),
+      builder: (_, __) => const ExerciseSelectScreen(),
     ),
     GoRoute(
       path: '/workout/solo',
-      builder: (_, __) => const _AuthGuard(child: SoloWorkoutScreen()),
+      builder: (_, __) => const SoloWorkoutScreen(),
     ),
     GoRoute(
       path: '/workout/summary',
-      builder: (_, __) => const _AuthGuard(child: WorkoutSummaryScreen()),
+      builder: (_, __) => const WorkoutSummaryScreen(),
     ),
     GoRoute(
       path: '/duel/lobby',
-      builder: (_, __) => const _AuthGuard(child: DuelLobbyScreen()),
+      builder: (_, __) => const DuelLobbyScreen(),
     ),
     GoRoute(
       path: '/duel/active',
-      builder: (_, __) => const _AuthGuard(child: DuelScreen()),
+      builder: (_, __) => const DuelScreen(),
     ),
     GoRoute(
       path: '/duel/result',
-      builder: (_, __) => const _AuthGuard(child: DuelResultScreen()),
+      builder: (_, __) => const DuelResultScreen(),
     ),
     GoRoute(
       path: '/challenges',
-      builder: (_, __) => const _AuthGuard(child: ChallengeScreen()),
+      builder: (_, __) => const ChallengeScreen(),
     ),
     GoRoute(
       path: '/friends',
-      builder: (_, __) => const _AuthGuard(child: FriendsScreen()),
+      builder: (_, __) => const FriendsScreen(),
     ),
     GoRoute(
       path: '/leaderboard',
-      builder: (_, __) => const _AuthGuard(child: LeaderboardScreen()),
+      builder: (_, __) => const LeaderboardScreen(),
     ),
     GoRoute(
       path: '/profile',
-      builder: (_, __) => const _AuthGuard(child: ProfileScreen()),
+      builder: (_, __) => const ProfileScreen(),
     ),
   ],
 );

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../providers/streak_provider.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
@@ -104,24 +106,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF201F1F),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFF353534)),
-            ),
-            child: Text(
-              '12🔥',
-              style: TextStyle(
-                fontFamily: 'SpaceMono',
-                fontSize: 12,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
-              ),
-            ),
-          ),
+          _StreakBadge(),
         ],
       ),
     );
@@ -457,6 +442,31 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StreakBadge extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final streak = ref.watch(streakProvider);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF201F1F),
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: const Color(0xFF353534)),
+      ),
+      child: Text(
+        '${streak}🔥',
+        style: const TextStyle(
+          fontFamily: 'SpaceMono',
+          fontSize: 12,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF6CFF80),
+        ),
       ),
     );
   }

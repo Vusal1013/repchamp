@@ -148,6 +148,11 @@ create index if not exists idx_friend_requests_from on friend_requests(from_user
 -- 3. ROW LEVEL SECURITY
 -- ============================================================
 
+-- Schema grants (authenticated ve anon rollerine izin ver)
+grant usage on schema public to anon, authenticated;
+grant all on all tables in schema public to anon, authenticated;
+grant all on all sequences in schema public to anon, authenticated;
+
 -- 3a. Profiles
 alter table profiles enable row level security;
 
@@ -397,18 +402,20 @@ language sql
 security definer
 as $$
   select
-    case when f.user_id = get_friend_leaderboard.user_id then f.friend_id else f.user_id end,
+    distinct on (p.id)
+    p.id,
     p.username,
-    coalesce(sum(ws.rep_count), 0)::bigint,
+    coalesce(sum(ws.rep_count) filter (where ws.user_id = p.id), 0)::bigint as total_reps,
     p.level,
     p.streak
   from friendships f
-  join profiles p on p.id = case when f.user_id = get_friend_leaderboard.user_id then f.friend_id else f.user_id end
+  join profiles p on p.id in (f.user_id, f.friend_id)
   left join workout_sessions ws on ws.user_id = p.id
   where (f.user_id = get_friend_leaderboard.user_id or f.friend_id = get_friend_leaderboard.user_id)
     and f.status = 'accepted'
+    and p.id <> get_friend_leaderboard.user_id
   group by p.id, p.username, p.level, p.streak
-  order by total_reps desc
+  order by p.id, total_reps desc
   limit limit_count;
 $$;
 

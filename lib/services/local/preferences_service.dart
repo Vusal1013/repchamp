@@ -18,4 +18,24 @@ class PreferencesService {
   Future<void> setTotalLifetimeReps(int reps) async {
     await _prefs?.setInt('lifetime_reps', reps);
   }
+
+  // ─── Streak ──────────────────────────────────────
+
+  String? get lastWorkoutDate => _prefs?.getString('last_workout_date');
+
+  Future<void> setLastWorkoutDate(String date) async {
+    await _prefs?.setString('last_workout_date', date);
+  }
+
+  int get streak => _prefs?.getInt('streak') ?? 0;
+
+  Future<void> setStreak(int value) async {
+    await _prefs?.setInt('streak', value);
+  }
+
+  int get longestStreak => _prefs?.getInt('longest_streak') ?? 0;
+
+  Future<void> setLongestStreak(int value) async {
+    await _prefs?.setInt('longest_streak', value);
+  }
 }

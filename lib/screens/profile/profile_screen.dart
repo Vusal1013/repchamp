@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/user_profile_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
@@ -10,6 +11,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider);
+    final authUser = ref.watch(currentUserProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
@@ -21,17 +23,25 @@ class ProfileScreen extends ConsumerWidget {
               child: profileAsync.when(
                 data: (profile) {
                   if (profile == null) {
-                    return const Center(
-                      child: Text('Profile not found',
-                          style: TextStyle(color: Color(0xFFFFB4AB))),
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Profile not found',
+                              style: TextStyle(color: Color(0xFFFFB4AB))),
+                          SizedBox(height: 8),
+                          Text(authUser?.email ?? '',
+                              style: TextStyle(color: Color(0xFFBACBB6), fontSize: 12)),
+                        ],
+                      ),
                     );
                   }
-                  return _buildBody(profile);
+                  return _buildBody(profile, authUser?.email ?? '');
                 },
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
                 ),
-                error: (_, __) => const Center(
+                error: (err, _) => Center(
                   child: Text('Failed to load profile',
                       style: TextStyle(color: Color(0xFFFFB4AB))),
                 ),
@@ -105,12 +115,12 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   // ─── Body ────────────────────────────────────────
-  Widget _buildBody(UserProfile profile) {
+  Widget _buildBody(UserProfile profile, String email) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
         children: [
-          _buildHeroSection(profile),
+          _buildHeroSection(profile, email),
           const SizedBox(height: 16),
           _buildStatsGrid(),
           const SizedBox(height: 16),
@@ -125,7 +135,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   // ─── Hero Section ────────────────────────────────
-  Widget _buildHeroSection(UserProfile profile) {
+  Widget _buildHeroSection(UserProfile profile, String email) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -182,6 +192,14 @@ class ProfileScreen extends ConsumerWidget {
               fontSize: 28,
               fontWeight: FontWeight.w700,
               color: const Color(0xFFE5E2E1),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            email,
+            style: TextStyle(
+              fontSize: 12,
+              color: const Color(0xFFBACBB6),
             ),
           ),
           const SizedBox(height: 8),

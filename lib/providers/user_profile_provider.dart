@@ -10,5 +10,23 @@ final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
   if (user == null) return null;
 
   final service = ref.watch(profileServiceProvider);
-  return service.getProfile(user.id);
+
+  try {
+    final profile = await service.getProfile(user.id);
+    if (profile != null) return profile;
+  } catch (_) {}
+
+  final email = user.email;
+  final metadata = user.userMetadata;
+  final username = metadata?['username'] as String? ?? email?.split('@').first ?? 'Player';
+
+  return UserProfile(
+    id: user.id,
+    username: username,
+    avatarUrl: metadata?['avatar_url'] as String?,
+    level: 1,
+    xp: 0,
+    streak: 0,
+    createdAt: DateTime.now(),
+  );
 });
