@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:go_router/go_router.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class DuelResultScreen extends StatefulWidget {
   const DuelResultScreen({super.key});
@@ -143,37 +144,10 @@ class _DuelResultScreenState extends State<DuelResultScreen>
                 child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
               ),
               const SizedBox(width: 12),
-              Text(
-                'FITDUEL',
-                style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.01,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
             ],
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF201F1F),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFF353534)),
-            ),
-            child: Text(
-              '12🔥',
-              style: TextStyle(
-                fontFamily: 'SpaceMono',
-                fontSize: 12,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
-              ),
-            ),
-          ),
+          const StreakBadge(),
         ],
       ),
     );

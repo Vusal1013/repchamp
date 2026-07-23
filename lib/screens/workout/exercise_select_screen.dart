@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/exercise_type.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class ExerciseSelectScreen extends StatelessWidget {
   final bool isDuel;
@@ -94,30 +95,10 @@ class ExerciseSelectScreen extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'FITDUEL',
-                style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.01,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
             ],
           ),
           const Spacer(),
-          Text(
-            '12🔥',
-            style: TextStyle(
-              fontFamily: 'SpaceMono',
-              fontSize: 12,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF6CFF80),
-            ),
-          ),
+          const StreakBadge(),
         ],
       ),
     );

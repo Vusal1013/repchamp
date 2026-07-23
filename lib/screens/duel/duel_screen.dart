@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import '../../models/duel_model.dart';
 import '../../models/exercise_type.dart';
 import '../../providers/duel_provider.dart';
 import '../../providers/pose_detection_provider.dart';
 import '../../providers/rep_counter_provider.dart';
+import '../../providers/streak_provider.dart';
 import '../../widgets/camera/camera_preview_widget.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
@@ -22,6 +22,7 @@ class DuelScreen extends ConsumerStatefulWidget {
 class _DuelScreenState extends ConsumerState<DuelScreen>
     with SingleTickerProviderStateMixin {
   bool _duelActive = false;
+  bool _isSoloMode = false;
   int _remainingSeconds = 60;
   Timer? _countdownTimer;
   late AnimationController _skeletonAnim;
@@ -41,6 +42,11 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
         _skeletonOpacity = 0.2 + 0.4 * (_skeletonAnim.value);
       });
     });
+
+    final extra = GoRouterState.of(context).extra;
+    if (extra is Map<String, dynamic> && extra['soloMode'] == true) {
+      _isSoloMode = true;
+    }
 
     _setupDuel();
     _startTimer();
@@ -90,7 +96,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
   }
 
   Future<void> _syncReps() async {
-    if (!_duelActive) return;
+    if (!_duelActive || _isSoloMode) return;
     final duelService = ref.read(duelServiceProvider);
     final roomId = ref.read(duelRoomIdProvider);
     final userId = ref.read(currentUserIdProvider);
@@ -102,19 +108,41 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
   }
 
   Future<void> _onTimerEnd() async {
+    final reps = ref.read(repCounterProvider.notifier).repCount;
+
+    if (_isSoloMode) {
+      ref.read(poseDetectionServiceProvider).dispose();
+      ref.read(poseProvider.notifier).state = null;
+      ref.read(cameraInitializedProvider.notifier).state = false;
+      ref.read(repCounterProvider.notifier).reset();
+
+      if (mounted) {
+        context.push('/duel/result', extra: {
+          'winner_id': ref.read(currentUserIdProvider),
+          'my_reps': reps,
+          'opponent_reps': 0,
+          'opponent_name': 'BOT',
+          'room_id': 'solo_test',
+          'my_user_id': ref.read(currentUserIdProvider),
+        });
+      }
+      return;
+    }
+
     final duelService = ref.read(duelServiceProvider);
     final roomId = ref.read(duelRoomIdProvider);
     final userId = ref.read(currentUserIdProvider);
-    final reps = ref.read(repCounterProvider.notifier).repCount;
 
     if (roomId == null || userId == null) return;
 
     await duelService.updateRepCount(roomId, userId, reps);
     await Future.delayed(const Duration(milliseconds: 500));
 
-    final winnerId = await duelService.finishDuel(roomId);
+    final result = await duelService.finishDuel(roomId);
+    final winnerId = result['winner'];
 
-    await duelService.saveDuelResults(roomId, userId, reps, 60);
+    final isWinner = userId == winnerId;
+    await duelService.saveDuelResults(roomId, userId, reps, 60, xpEarned: isWinner ? 30 : 0);
 
     ref.read(poseDetectionServiceProvider).dispose();
     ref.read(poseProvider.notifier).state = null;
@@ -132,7 +160,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
 
   @override
   Widget build(BuildContext context) {
-    final opponentPlayer = ref.watch(opponentPlayerProvider);
+    final opponentPlayer = _isSoloMode ? null : ref.watch(opponentPlayerProvider);
     final repState = ref.watch(repCounterProvider);
 
     final myReps = repState.repCount;
@@ -200,7 +228,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
           // Battle bar
           Positioned(
             top: 72, left: 20, right: 20,
-            child: _buildBattleBar(myFraction, opponentReps, opponentPlayer),
+            child: _buildBattleBar(myFraction, opponentReps, opponentPlayer, _isSoloMode),
           ),
 
           // Middle stats
@@ -258,7 +286,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
               ),
               const SizedBox(width: 12),
               Text(
-                'FITDUEL',
+                'REPCHAMP',
                 style: TextStyle(
                   fontFamily: 'ArchivoNarrow',
                   fontSize: 28,
@@ -277,16 +305,16 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
               borderRadius: BorderRadius.circular(9999),
               border: Border.all(color: const Color(0xFF353534)),
             ),
-            child: Text(
-              '12🔥',
-              style: TextStyle(
-                fontFamily: 'SpaceMono',
-                fontSize: 12,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
-              ),
+          child: Text(
+            '${ref.watch(streakProvider)}🔥',
+            style: TextStyle(
+              fontFamily: 'SpaceMono',
+              fontSize: 12,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF6CFF80),
             ),
+          ),
           ),
         ],
       ),
@@ -294,7 +322,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
   }
 
   // ─── Battle Bar ──────────────────────────────────
-  Widget _buildBattleBar(double myFraction, int opponentReps, DuelPlayer? opponentPlayer) {
+  Widget _buildBattleBar(double myFraction, int opponentReps, dynamic opponentPlayer, bool soloMode) {
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -405,7 +433,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
                       ),
                     ),
                     Text(
-                      opponentPlayer?.username?.toUpperCase() ?? 'RIVAL',
+                      soloMode ? 'BOT' : opponentPlayer?.username?.toUpperCase() ?? 'RIVAL',
                       style: TextStyle(
                         fontFamily: 'SpaceMono',
                         fontSize: 12,
@@ -500,25 +528,26 @@ class _DuelScreenState extends ConsumerState<DuelScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _buildGlassLabel('OPPONENT', const Color(0xFF568DFF), true),
+            _buildGlassLabel(_isSoloMode ? 'BOT' : 'OPPONENT', const Color(0xFF568DFF), true),
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(
-                  'REPS',
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 12,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFB0C6FF),
+                if (!_isSoloMode)
+                  Text(
+                    'REPS',
+                    style: TextStyle(
+                      fontFamily: 'SpaceMono',
+                      fontSize: 12,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFB0C6FF),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
+                if (!_isSoloMode) const SizedBox(width: 4),
                 Text(
-                  '$opponentReps',
+                  _isSoloMode ? '--' : '$opponentReps',
                   style: TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 48,

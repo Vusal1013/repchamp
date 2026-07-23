@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/user_profile_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../providers/profile_stats_provider.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../services/supabase/profile_stats_service.dart';
+import '../../services/supabase/dashboard_service.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -12,13 +18,18 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider);
     final authUser = ref.watch(currentUserProvider);
+    final duelStatsAsync = ref.watch(duelStatsProvider);
+    final totalRepsAsync = ref.watch(totalRepsProvider);
+    final recentDuelsAsync = ref.watch(recentDuelsProvider);
+    final achievementsAsync = ref.watch(achievementsProvider);
+    final weeklyAsync = ref.watch(weeklyBreakdownProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(context),
             Expanded(
               child: profileAsync.when(
                 data: (profile) {
@@ -36,7 +47,9 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     );
                   }
-                  return _buildBody(profile, authUser?.email ?? '');
+                  return _buildBody(profile, authUser?.email ?? '',
+                      duelStatsAsync, totalRepsAsync, recentDuelsAsync,
+                      achievementsAsync, weeklyAsync);
                 },
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
@@ -54,8 +67,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Header ──────────────────────────────────────
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -78,63 +90,61 @@ class ProfileScreen extends ConsumerWidget {
                 child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
               ),
               const SizedBox(width: 12),
-              Text(
-                'FITDUEL',
-                style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.01,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
             ],
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF201F1F),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFF353534)),
-            ),
-            child: Text(
-              '12🔥',
-              style: TextStyle(
-                fontFamily: 'SpaceMono',
-                fontSize: 12,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
+          GestureDetector(
+            onTap: () => context.push('/profile/settings'),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF201F1F),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF353534)),
               ),
+              child: const Icon(Icons.settings_rounded, color: Color(0xFF6CFF80), size: 20),
             ),
           ),
+          const SizedBox(width: 8),
+          const StreakBadge(),
         ],
       ),
     );
   }
 
-  // ─── Body ────────────────────────────────────────
-  Widget _buildBody(UserProfile profile, String email) {
+  Widget _buildBody(
+    UserProfile profile,
+    String email,
+    AsyncValue<DuelStats?> duelStatsAsync,
+    AsyncValue<int> totalRepsAsync,
+    AsyncValue<List<RecentDuelItem>> recentDuelsAsync,
+    AsyncValue<List<AchievementInfo>> achievementsAsync,
+    AsyncValue<WeeklyBreakdown> weeklyAsync,
+  ) {
+    final duelStats = duelStatsAsync.asData?.value;
+    final totalReps = totalRepsAsync.asData?.value ?? 0;
+    final recentDuels = recentDuelsAsync.asData?.value ?? [];
+    final achievements = achievementsAsync.asData?.value ?? [];
+    final weekly = weeklyAsync.asData?.value;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
         children: [
           _buildHeroSection(profile, email),
           const SizedBox(height: 16),
-          _buildStatsGrid(),
+          _buildStatsGrid(duelStats, totalReps),
           const SizedBox(height: 16),
-          _buildXpChart(),
+          _buildXpChart(weekly),
           const SizedBox(height: 16),
-          _buildAchievements(),
+          _buildAchievements(achievements),
           const SizedBox(height: 16),
-          _buildRecentDuels(),
+          _buildRecentDuels(recentDuels),
         ],
       ),
     );
   }
 
-  // ─── Hero Section ────────────────────────────────
   Widget _buildHeroSection(UserProfile profile, String email) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -160,7 +170,9 @@ class ProfileScreen extends ConsumerWidget {
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: const Icon(Icons.person, size: 64, color: Color(0xFF6CFF80)),
+                child: profile.avatarUrl != null
+                    ? ClipOval(child: Image.network(profile.avatarUrl!, fit: BoxFit.cover))
+                    : const Icon(Icons.person, size: 64, color: Color(0xFF6CFF80)),
               ),
               Positioned(
                 bottom: -2, right: -8,
@@ -174,7 +186,6 @@ class ProfileScreen extends ConsumerWidget {
                   child: Text(
                     'LVL ${profile.level}',
                     style: TextStyle(
-                      fontFamily: 'SpaceMono',
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF00390F),
@@ -188,7 +199,6 @@ class ProfileScreen extends ConsumerWidget {
           Text(
             '@${profile.username}',
             style: TextStyle(
-              fontFamily: 'ArchivoNarrow',
               fontSize: 28,
               fontWeight: FontWeight.w700,
               color: const Color(0xFFE5E2E1),
@@ -213,7 +223,6 @@ class ProfileScreen extends ConsumerWidget {
             child: Text(
               'PRO MEMBER',
               style: TextStyle(
-                fontFamily: 'SpaceMono',
                 fontSize: 12,
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
@@ -226,24 +235,26 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Stats Grid ──────────────────────────────────
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(DuelStats? duelStats, int totalReps) {
+    final wins = duelStats?.wins ?? 0;
+    final winRate = duelStats?.winRate ?? 0;
+
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildWinRateCard()),
+            Expanded(child: _buildWinRateCard(winRate)),
             const SizedBox(width: 16),
-            Expanded(child: _buildDuelsWonCard()),
+            Expanded(child: _buildDuelsWonCard(wins)),
           ],
         ),
         const SizedBox(height: 16),
-        _buildTotalRepsCard(),
+        _buildTotalRepsCard(totalReps),
       ],
     );
   }
 
-  Widget _buildWinRateCard() {
+  Widget _buildWinRateCard(double winRate) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -256,7 +267,6 @@ class ProfileScreen extends ConsumerWidget {
           Text(
             'WIN RATE',
             style: TextStyle(
-              fontFamily: 'SpaceMono',
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
@@ -265,9 +275,8 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '58%',
+            '${winRate.toStringAsFixed(0)}%',
             style: TextStyle(
-              fontFamily: 'ArchivoNarrow',
               fontSize: 36,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.04,
@@ -282,7 +291,7 @@ class ProfileScreen extends ConsumerWidget {
               color: const Color(0xFF353534),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
-                widthFactor: 0.58,
+                widthFactor: winRate / 100,
                 child: Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF6CFF80),
@@ -302,7 +311,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDuelsWonCard() {
+  Widget _buildDuelsWonCard(int wins) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -315,7 +324,6 @@ class ProfileScreen extends ConsumerWidget {
           Text(
             'DUELS WON',
             style: TextStyle(
-              fontFamily: 'SpaceMono',
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
@@ -324,41 +332,22 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '84',
+            '$wins',
             style: TextStyle(
-              fontFamily: 'ArchivoNarrow',
               fontSize: 24,
               fontWeight: FontWeight.w600,
               color: const Color(0xFFE5E2E1),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _stackedAvatar(const Color(0xFF568DFF)),
-              _stackedAvatar(const Color(0xFFFFB3AC)),
-              _stackedAvatar(const Color(0xFF00E556)),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _stackedAvatar(Color color) {
-    return Container(
-      width: 24,
-      height: 24,
-      margin: const EdgeInsets.only(right: -8),
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF131313)),
-      ),
-    );
-  }
-
-  Widget _buildTotalRepsCard() {
+  Widget _buildTotalRepsCard(int totalReps) {
+    final display = totalReps >= 1000
+        ? '${(totalReps / 1000).toStringAsFixed(1)}K'
+        : '$totalReps';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -374,7 +363,6 @@ class ProfileScreen extends ConsumerWidget {
               Text(
                 'TOTAL REPS',
                 style: TextStyle(
-                  fontFamily: 'SpaceMono',
                   fontSize: 12,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700,
@@ -383,9 +371,8 @@ class ProfileScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '12,400',
+                display,
                 style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFFE5E2E1),
@@ -400,8 +387,11 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  // ─── XP Chart ────────────────────────────────────
-  Widget _buildXpChart() {
+  Widget _buildXpChart(WeeklyBreakdown? weekly) {
+    final dailyXp = weekly?.dailyXp ?? [0, 0, 0, 0, 0, 0, 0];
+    final totalWeekly = weekly?.totalXp ?? 0;
+    final maxDay = dailyXp.reduce((a, b) => a > b ? a : b);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -416,7 +406,6 @@ class ProfileScreen extends ConsumerWidget {
               Text(
                 'WEEKLY XP PROGRESS',
                 style: TextStyle(
-                  fontFamily: 'SpaceMono',
                   fontSize: 12,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700,
@@ -424,9 +413,8 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
               Text(
-                '+2,450 XP',
+                '+$totalWeekly XP',
                 style: TextStyle(
-                  fontFamily: 'SpaceMono',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF6CFF80),
@@ -437,19 +425,44 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           SizedBox(
             height: 128,
-            child: CustomPaint(
-              size: const Size(double.infinity, 128),
-              painter: _ChartPainter(),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (i) {
+                final xp = dailyXp[i];
+                final height = maxDay > 0 ? (xp / maxDay) * 100 : 0.0;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          height: height.clamp(4.0, 100.0),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6CFF80),
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF39FF6A).withAlpha(77),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
             ),
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: ['MON', 'WED', 'FRI', 'SUN'].map((day) {
+            children: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) {
               return Text(
                 day,
                 style: TextStyle(
-                  fontFamily: 'SpaceMono',
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFFBACBB6),
@@ -462,75 +475,112 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Achievements ────────────────────────────────
-  Widget _buildAchievements() {
+  Widget _buildAchievements(List<AchievementInfo> achievements) {
+    if (achievements.isEmpty) return const SizedBox.shrink();
+    final unlocked = achievements.where((a) => a.unlocked).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
-          child: Text(
-            'ACHIEVEMENTS',
-            style: TextStyle(
-              fontFamily: 'SpaceMono',
-              fontSize: 12,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
-            ),
+          child: Row(
+            children: [
+              Text(
+                'ACHIEVEMENTS',
+                style: TextStyle(
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFE5E2E1),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${unlocked.length}/${achievements.length}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF6CFF80),
+                ),
+              ),
+            ],
           ),
         ),
-        Row(
-          children: [
-            Expanded(child: _achieveCard(Icons.local_fire_department_rounded, '7 DAY\nSTREAK')),
-            const SizedBox(width: 16),
-            Expanded(child: _achieveCard(Icons.workspace_premium_rounded, 'FIRST\nWIN')),
-            const SizedBox(width: 16),
-            Expanded(child: _achieveCard(Icons.military_tech_rounded, '1000\nCLUB')),
-          ],
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: achievements.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final a = achievements[index];
+              return _achieveCard(a);
+            },
+          ),
         ),
       ],
     );
   }
 
-  Widget _achieveCard(IconData icon, String label) {
+  Widget _achieveCard(AchievementInfo a) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: 90,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(8),
+        color: a.unlocked
+            ? Colors.white.withAlpha(8)
+            : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: a.unlocked
+              ? const Color(0xFF6CFF80).withAlpha(76)
+              : const Color(0xFF2A2A2A),
+        ),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A2A2A),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF353534)),
-            ),
-            child: Icon(icon, color: const Color(0xFF6CFF80), size: 24),
+          Icon(
+            _iconFromString(a.icon),
+            color: a.unlocked
+                ? const Color(0xFF6CFF80)
+                : const Color(0xFF555555),
+            size: 24,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
-            label,
+            a.name,
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontFamily: 'SpaceMono',
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
-              height: 1.3,
+              color: a.unlocked
+                  ? const Color(0xFFE5E2E1)
+                  : const Color(0xFF555555),
+              height: 1.2,
             ),
           ),
+          if (a.unlocked && a.unlockedAt != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              _formatDate(a.unlockedAt!),
+              style: TextStyle(
+                fontSize: 7,
+                color: const Color(0xFF6CFF80).withAlpha(150),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  // ─── Recent Duels ────────────────────────────────
-  Widget _buildRecentDuels() {
+  Widget _buildRecentDuels(List<RecentDuelItem> duels) {
+    if (duels.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -539,7 +589,6 @@ class ProfileScreen extends ConsumerWidget {
           child: Text(
             'RECENT DUELS',
             style: TextStyle(
-              fontFamily: 'SpaceMono',
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
@@ -547,14 +596,16 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         ),
-        _duelItem(true, '@ShadowFit', 'Squat Duel', '2h ago', '+50 RP'),
-        const SizedBox(height: 4),
-        _duelItem(false, '@IronWill', 'Pushup Duel', '1d ago', '-20 RP'),
+        ...duels.map((d) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _duelItem(d),
+        )),
       ],
     );
   }
 
-  Widget _duelItem(bool won, String opponent, String type, String time, String rp) {
+  Widget _duelItem(RecentDuelItem duel) {
+    final xpText = duel.won ? '+50 XP' : '-20 XP';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -567,14 +618,14 @@ class ProfileScreen extends ConsumerWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: won
+              color: duel.won
                   ? const Color(0xFF6CFF80).withAlpha(26)
                   : const Color(0xFF353534),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Icon(
-              won ? Icons.emoji_events_rounded : Icons.close_rounded,
-              color: won ? const Color(0xFF6CFF80) : const Color(0xFFBACBB6),
+              duel.won ? Icons.emoji_events_rounded : Icons.close_rounded,
+              color: duel.won ? const Color(0xFF6CFF80) : const Color(0xFFBACBB6),
               size: 18,
             ),
           ),
@@ -584,7 +635,7 @@ class ProfileScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${won ? 'Won' : 'Lost'} vs $opponent',
+                  '${duel.won ? 'Won' : 'Lost'} vs @${duel.opponentUsername}',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -592,9 +643,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  '$type • $time',
+                  '${_exerciseLabel(duel.exerciseType)} • ${duel.timeAgo}',
                   style: TextStyle(
-                    fontFamily: 'SpaceMono',
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFFBACBB6),
@@ -604,12 +654,11 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           Text(
-            rp,
+            xpText,
             style: TextStyle(
-              fontFamily: 'SpaceMono',
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: won ? const Color(0xFF6CFF80) : const Color(0xFFBACBB6),
+              color: duel.won ? const Color(0xFF6CFF80) : const Color(0xFFBACBB6),
             ),
           ),
         ],
@@ -617,51 +666,40 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-}
-
-// ─── Chart Painter ───────────────────────────────────
-class _ChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final dataPoints = [0.8, 0.7, 0.85, 0.4, 0.55, 0.2, 0.35, 0.1, 0.15];
-    final dx = size.width / (dataPoints.length - 1);
-
-    final path = Path();
-    path.moveTo(0, size.height * dataPoints[0]);
-
-    for (int i = 1; i < dataPoints.length; i++) {
-      path.lineTo(dx * i, size.height * dataPoints[i]);
+  IconData _iconFromString(String name) {
+    switch (name) {
+      case 'fitness_center': return Icons.fitness_center;
+      case 'stars': return Icons.stars;
+      case 'military_tech': return Icons.military_tech;
+      case 'local_fire_department': return Icons.local_fire_department;
+      case 'whatshot': return Icons.whatshot;
+      case 'emoji_events': return Icons.emoji_events;
+      case 'bolt': return Icons.bolt;
+      case 'wb_sunny': return Icons.wb_sunny;
+      case 'dark_mode': return Icons.dark_mode;
+      case 'autorenew': return Icons.autorenew;
+      case 'handyman': return Icons.handyman;
+      case 'flash_on': return Icons.flash_on;
+      case 'sports_kabaddi': return Icons.sports_kabaddi;
+      case 'workspace_premium': return Icons.workspace_premium;
+      default: return Icons.emoji_events;
     }
-
-    // Stroke
-    final strokePaint = Paint()
-      ..color = const Color(0xFF39FF6A)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    canvas.drawPath(path, strokePaint);
-
-    // Fill
-    final fillPath = Path.from(path);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF39FF6A).withAlpha(51),
-          const Color(0xFF39FF6A).withAlpha(0),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawPath(fillPath, fillPaint);
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  String _exerciseLabel(String type) {
+    switch (type) {
+      case 'push_up': return 'Pushup Duel';
+      case 'squat': return 'Squat Duel';
+      case 'crunch': return 'Crunch Duel';
+      case 'pull_up': return 'Pull-up Duel';
+      case 'plank': return 'Plank Duel';
+      case 'lunge': return 'Lunge Duel';
+      case 'shoulder_press': return 'Shoulder Press Duel';
+      default: return 'Duel';
+    }
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.month}/${dt.day}';
+  }
 }

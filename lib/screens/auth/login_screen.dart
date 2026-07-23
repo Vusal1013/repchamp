@@ -71,7 +71,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'FITDUEL',
+                  'REPCHAMP',
                   style: TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 36,

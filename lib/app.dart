@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -17,6 +18,7 @@ import 'screens/challenge/challenge_screen.dart';
 import 'screens/friends/friends_screen.dart';
 import 'screens/leaderboard/leaderboard_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/profile/profile_settings_screen.dart';
 
 final _publicRoutes = <String>{'/login', '/signup'};
 
@@ -78,17 +80,26 @@ final GoRouter appRouter = GoRouter(
       path: '/profile',
       builder: (_, __) => const ProfileScreen(),
     ),
+    GoRoute(
+      path: '/profile/settings',
+      builder: (_, __) => const ProfileSettingsScreen(),
+    ),
   ],
 );
 
-class RepChampApp extends StatelessWidget {
+class RepChampApp extends ConsumerWidget {
   const RepChampApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
     return MaterialApp.router(
       title: 'RepChamp',
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: settings.themeMode,
+      locale: settings.locale,
+      supportedLocales: const [Locale('en'), Locale('tr')],
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
     );

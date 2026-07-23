@@ -4,6 +4,7 @@ class RepSession {
   final String exerciseType;
   final int repCount;
   final int? durationSeconds;
+  final int xpEarned;
   final DateTime? createdAt;
 
   const RepSession({
@@ -12,6 +13,7 @@ class RepSession {
     required this.exerciseType,
     required this.repCount,
     this.durationSeconds,
+    this.xpEarned = 0,
     this.createdAt,
   });
 
@@ -22,6 +24,7 @@ class RepSession {
       'exercise_type': exerciseType,
       'rep_count': repCount,
       'duration_seconds': durationSeconds,
+      'xp_earned': xpEarned,
     };
   }
 }

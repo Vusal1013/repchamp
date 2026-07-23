@@ -30,6 +30,7 @@ create table if not exists workout_sessions (
   )),
   rep_count int not null,
   duration_seconds int,
+  xp_earned int default 0,
   created_at timestamptz default now()
 );
 
@@ -360,7 +361,7 @@ $$;
 -- 5. FUNCTIONS (RPC)
 -- ============================================================
 
--- 5a. Leaderboard: top users by total reps
+-- 5a. Leaderboard: top users by total XP
 create or replace function get_leaderboard(limit_count int default 20)
 returns table (
   user_id uuid,
@@ -369,7 +370,8 @@ returns table (
   total_reps bigint,
   total_sessions bigint,
   level int,
-  streak int
+  streak int,
+  xp int
 )
 language sql
 security definer
@@ -381,12 +383,29 @@ as $$
     coalesce(sum(ws.rep_count), 0)::bigint as total_reps,
     count(ws.id)::bigint as total_sessions,
     p.level,
-    p.streak
+    p.streak,
+    p.xp
   from profiles p
   left join workout_sessions ws on ws.user_id = p.id
-  group by p.id, p.username, p.avatar_url, p.level, p.streak
-  order by total_reps desc
+  group by p.id, p.username, p.avatar_url, p.level, p.streak, p.xp
+  order by p.xp desc
   limit limit_count;
+$$;
+
+-- 5c. Get current user's rank and total user count for leaderboard footer
+create or replace function get_user_rank(target_user_id uuid)
+returns table (rank bigint, total_count bigint, total_xp int)
+language sql
+security definer
+as $$
+  with ranked as (
+    select id, xp, row_number() over (order by xp desc) as pos
+    from profiles
+  )
+  select
+    (select pos from ranked where id = target_user_id) as rank,
+    (select count(*) from profiles)::bigint as total_count,
+    (select xp from ranked where id = target_user_id) as total_xp;
 $$;
 
 -- 5b. Haftalik arkadas liderlik tablosu
@@ -454,19 +473,184 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, username)
+  insert into public.profiles (id, username, xp, level)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'username', 'user_' || substr(new.id::text, 1, 8))
+    coalesce(new.raw_user_meta_data ->> 'username', 'user_' || substr(new.id::text, 1, 8)),
+    100,
+    1
   );
   return new;
 end;
+$$;
+
+-- 5d. Add/remove XP from a user (for duel results) + auto level-up
+create or replace function add_xp(target_user_id uuid, xp_amount int)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  update profiles
+  set
+    xp = greatest(0, xp + xp_amount),
+    level = greatest(1, floor((greatest(0, xp + xp_amount)) / 1000) + 1)
+  where id = target_user_id;
+end;
+$$;
+
+-- 5e. Get daily stats for a user (today's total reps and XP)
+create or replace function get_daily_stats(target_user_id uuid)
+returns table (total_reps bigint, total_xp bigint)
+language sql
+security definer
+as $$
+  select
+    coalesce(sum(ws.rep_count), 0)::bigint as total_reps,
+    coalesce(sum(ws.xp_earned), 0)::bigint as total_xp
+  from workout_sessions ws
+  where ws.user_id = target_user_id
+    and ws.created_at >= current_date::timestamptz;
+$$;
+
+-- 5f. Get weekly XP breakdown per day for the current week
+create or replace function get_weekly_breakdown(target_user_id uuid)
+returns table (day_index int, total_xp bigint)
+language sql
+security definer
+as $$
+  select
+    extract(dow from ws.created_at)::int as day_index,
+    coalesce(sum(ws.xp_earned), 0)::bigint as total_xp
+  from workout_sessions ws
+  where ws.user_id = target_user_id
+    and ws.created_at >= date_trunc('week', current_date)::timestamptz
+  group by extract(dow from ws.created_at)
+  order by day_index;
+$$;
+
+-- 5g. Get weekly total XP
+create or replace function get_weekly_xp(target_user_id uuid)
+returns int
+language sql
+security definer
+as $$
+  select coalesce(sum(ws.xp_earned), 0)::int
+  from workout_sessions ws
+  where ws.user_id = target_user_id
+    and ws.created_at >= date_trunc('week', current_date)::timestamptz;
+$$;
+
+-- 5h. Get recent activity for a user
+create or replace function get_recent_activity(target_user_id uuid, limit_count int default 10)
+returns table (
+  exercise_type text,
+  rep_count int,
+  xp_earned int,
+  duration_seconds int,
+  created_at timestamptz
+)
+language sql
+security definer
+as $$
+  select ws.exercise_type, ws.rep_count, ws.xp_earned, ws.duration_seconds, ws.created_at
+  from workout_sessions ws
+  where ws.user_id = target_user_id
+  order by ws.created_at desc
+  limit limit_count;
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- 5i. Profile duel stats (total duels, wins, losses, win rate)
+create or replace function get_profile_duel_stats(target_user_id uuid)
+returns table (total_duels bigint, wins bigint, losses bigint, win_rate numeric)
+language sql
+security definer
+as $$
+  with duel_counts as (
+    select
+      count(*)::bigint as total,
+      count(*) filter (where dr.winner_id = target_user_id)::bigint as w
+    from duel_rooms dr
+    join duel_players dp on dp.room_id = dr.id and dp.user_id = target_user_id
+    where dr.status = 'finished'
+  )
+  select
+    total,
+    w,
+    (total - w)::bigint as losses,
+    case when total > 0 then round((w::numeric / total) * 100, 1) else 0 end
+  from duel_counts;
+$$;
+
+-- 5j. Recent duels with opponent info
+create or replace function get_recent_duels(target_user_id uuid, limit_count int default 20)
+returns table (
+  room_id uuid,
+  exercise_type text,
+  opponent_username text,
+  opponent_avatar_url text,
+  won boolean,
+  created_at timestamptz
+)
+language sql
+security definer
+as $$
+  select
+    dr.id,
+    dr.exercise_type,
+    op.username,
+    op.avatar_url,
+    dr.winner_id = target_user_id,
+    dr.created_at
+  from duel_rooms dr
+  join duel_players dp1 on dp1.room_id = dr.id and dp1.user_id = target_user_id
+  join duel_players dp2 on dp2.room_id = dr.id and dp2.user_id <> target_user_id
+  join profiles op on op.id = dp2.user_id
+  where dr.status = 'finished'
+  order by dr.created_at desc
+  limit limit_count;
+$$;
+
+-- 5k. Total reps across all workout sessions
+create or replace function get_total_reps(target_user_id uuid)
+returns table (total_reps bigint)
+language sql
+security definer
+as $$
+  select coalesce(sum(rep_count), 0)::bigint
+  from workout_sessions
+  where user_id = target_user_id;
+$$;
+
+-- 5l. Get user achievements with metadata
+create or replace function get_user_achievements(target_user_id uuid)
+returns table (
+  achievement_id text,
+  unlocked boolean,
+  unlocked_at timestamptz
+)
+language sql
+security definer
+as $$
+  select
+    ach_id.achievement_id,
+    ua.id is not null as unlocked,
+    ua.unlocked_at
+  from (
+    values
+      ('first_rep'), ('club_100'), ('club_1000'), ('streak_7'), ('streak_30'),
+      ('first_win'), ('no_pain_no_gain'), ('early_bird'), ('night_owl'),
+      ('comeback_king'), ('perfect_form'), ('speed_demon'), ('duelist'), ('veteran')
+  ) as ach_id(achievement_id)
+  left join user_achievements ua
+    on ua.achievement_id = ach_id.achievement_id
+    and ua.user_id = target_user_id;
+$$;
 
 -- ============================================================
 -- 7. REALTIME (Canli guncellemeler icin)

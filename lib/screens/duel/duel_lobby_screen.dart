@@ -6,6 +6,7 @@ import '../../models/exercise_type.dart';
 import '../../providers/duel_matchmaking_provider.dart';
 import '../../providers/duel_provider.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class DuelLobbyScreen extends ConsumerStatefulWidget {
   const DuelLobbyScreen({super.key});
@@ -129,6 +130,8 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
                 const Spacer(),
                 if (matchState.state == MatchmakingState.idle)
                   _buildStartButton(),
+                if (matchState.state == MatchmakingState.idle)
+                  _buildSoloButton(),
                 if (matchState.state == MatchmakingState.searching)
                   _buildCancelButton(),
                 const SizedBox(height: 80),
@@ -179,27 +182,7 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
             ],
           ),
           const Spacer(),
-          Text(
-            'FITDUEL',
-            style: TextStyle(
-              fontFamily: 'ArchivoNarrow',
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.01,
-              color: const Color(0xFF6CFF80),
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '12🔥',
-            style: TextStyle(
-              fontFamily: 'SpaceMono',
-              fontSize: 12,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF6CFF80),
-            ),
-          ),
+          const StreakBadge(),
         ],
       ),
     );
@@ -657,6 +640,34 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6CFF80),
             foregroundColor: const Color(0xFF00390F),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSoloButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20).copyWith(top: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => context.push('/duel/active', extra: {'soloMode': true}),
+          icon: const Icon(Icons.person_outline_rounded, size: 20),
+          label: Text(
+            'SOLO TEST',
+            style: TextStyle(
+              fontFamily: 'SpaceMono',
+              fontSize: 14,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFBACBB6),
+            side: BorderSide(color: const Color(0xFF353534)),
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

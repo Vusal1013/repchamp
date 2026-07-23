@@ -25,6 +25,7 @@ class WorkoutService {
         exerciseType: m['exercise_type'] as String,
         repCount: m['rep_count'] as int,
         durationSeconds: m['duration_seconds'] as int?,
+        xpEarned: (m['xp_earned'] as num?)?.toInt() ?? 0,
         createdAt: DateTime.parse(m['created_at'] as String),
       );
     }).toList();

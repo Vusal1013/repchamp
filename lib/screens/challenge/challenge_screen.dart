@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/weekly_challenge_model.dart';
 import '../../providers/challenge_provider.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class ChallengeScreen extends ConsumerWidget {
   const ChallengeScreen({super.key});
@@ -57,24 +58,7 @@ class ChallengeScreen extends ConsumerWidget {
             ),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF201F1F),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFF353534)),
-            ),
-            child: Text(
-              '12🔥',
-              style: TextStyle(
-                fontFamily: 'SpaceMono',
-                fontSize: 12,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
-              ),
-            ),
-          ),
+          const StreakBadge(),
         ],
       ),
     );

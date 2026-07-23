@@ -80,7 +80,7 @@ class DuelService {
         .map((data) => DuelRoom.fromMap(data.first as Map<String, dynamic>));
   }
 
-  Future<String?> finishDuel(String roomId) async {
+  Future<Map<String, String?>> finishDuel(String roomId) async {
     final data = await _client
         .from('duel_players')
         .select()
@@ -88,29 +88,36 @@ class DuelService {
         .order('reps', ascending: false);
 
     final players = data as List<dynamic>;
-    if (players.length < 2) return null;
+    if (players.length < 2) return {'winner': null, 'loser': null};
 
     final winnerId = (players.first as Map<String, dynamic>)['user_id'] as String;
+    final loserId = (players.last as Map<String, dynamic>)['user_id'] as String;
 
     await _client
         .from('duel_rooms')
         .update({'status': 'finished', 'winner_id': winnerId})
         .eq('id', roomId);
 
-    return winnerId;
+    // Update XP
+    await _client.rpc('add_xp', params: {'target_user_id': winnerId, 'xp_amount': 50});
+    await _client.rpc('add_xp', params: {'target_user_id': loserId, 'xp_amount': -20});
+
+    return {'winner': winnerId, 'loser': loserId};
   }
 
   Future<void> saveDuelResults(
     String roomId,
     String userId,
     int reps,
-    int durationSeconds,
-  ) async {
+    int durationSeconds, {
+    int xpEarned = 0,
+  }) async {
     await _client.from('workout_sessions').insert({
       'user_id': userId,
       'exercise_type': 'push_up',
       'rep_count': reps,
       'duration_seconds': durationSeconds,
+      'xp_earned': xpEarned,
     });
   }
 }

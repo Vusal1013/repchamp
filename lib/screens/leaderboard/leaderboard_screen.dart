@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/duel_provider.dart';
 import '../../services/supabase/leaderboard_service.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 final leaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async {
   final service = LeaderboardService();
   return service.getLeaderboard(limit: 20);
+});
+
+final userRankProvider = FutureProvider<UserRankInfo?>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return null;
+  final service = LeaderboardService();
+  return service.getUserRank(userId);
 });
 
 class LeaderboardScreen extends ConsumerWidget {
@@ -14,6 +23,7 @@ class LeaderboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final leaderboard = ref.watch(leaderboardProvider);
+    final userRank = ref.watch(userRankProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
@@ -23,7 +33,7 @@ class LeaderboardScreen extends ConsumerWidget {
             _buildHeader(),
             Expanded(
               child: leaderboard.when(
-                data: (entries) => _buildBody(entries),
+                data: (entries) => _buildBody(entries, userRank.valueOrNull),
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
                 ),
@@ -42,7 +52,6 @@ class LeaderboardScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Header ──────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       height: 64,
@@ -82,37 +91,16 @@ class LeaderboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                'FITDUEL',
-                style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.01,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
             ],
           ),
           const Spacer(),
-          Text(
-            '12🔥',
-            style: TextStyle(
-              fontFamily: 'SpaceMono',
-              fontSize: 12,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF6CFF80),
-            ),
-          ),
+          const StreakBadge(),
         ],
       ),
     );
   }
 
-  // ─── Body ────────────────────────────────────────
-  Widget _buildBody(List<LeaderboardEntry> entries) {
+  Widget _buildBody(List<LeaderboardEntry> entries, UserRankInfo? rankInfo) {
     return Stack(
       children: [
         SingleChildScrollView(
@@ -127,16 +115,14 @@ class LeaderboardScreen extends ConsumerWidget {
             ],
           ),
         ),
-        // User position sticky footer
         Positioned(
           bottom: 0, left: 0, right: 0,
-          child: _buildUserFooter(),
+          child: _buildUserFooter(rankInfo),
         ),
       ],
     );
   }
 
-  // ─── Tabs ────────────────────────────────────────
   Widget _buildTabs() {
     return Container(
       padding: const EdgeInsets.all(4),
@@ -208,19 +194,18 @@ class LeaderboardScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Podium ──────────────────────────────────────
   Widget _buildPodium(List<LeaderboardEntry> entries) {
     if (entries.isEmpty) return const SizedBox.shrink();
 
     final top3 = <LeaderboardEntry?>[
-      entries.length > 1 ? entries[1] : null, // 2nd
-      entries.isNotEmpty ? entries[0] : null,  // 1st
-      entries.length > 2 ? entries[2] : null,  // 3rd
+      entries.length > 1 ? entries[1] : null,
+      entries.isNotEmpty ? entries[0] : null,
+      entries.length > 2 ? entries[2] : null,
     ];
 
     final colors = [const Color(0xFFC0C0C0), const Color(0xFF6CFF80), const Color(0xFFCD7F32)];
     final labels = ['2ND', '1ST', '3RD'];
-    final sizes = [16.0, 24.0, 16.0]; // avatar sizes
+    final sizes = [16.0, 24.0, 16.0];
     final borderWidth = [2.0, 4.0, 2.0];
 
     return Row(
@@ -253,10 +238,7 @@ class LeaderboardScreen extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colors[i],
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
+                  decoration: BoxDecoration(color: colors[i], borderRadius: BorderRadius.circular(9999)),
                   child: Text(
                     labels[i],
                     style: TextStyle(
@@ -280,7 +262,7 @@ class LeaderboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _formatXp(entry.totalReps),
+                  _formatXp(entry.xp),
                   style: TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 24,
@@ -296,7 +278,6 @@ class LeaderboardScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Ranked List ─────────────────────────────────
   Widget _buildRankedList(List<LeaderboardEntry> entries) {
     final listEntries = entries.length > 3 ? entries.sublist(3) : <LeaderboardEntry>[];
 
@@ -304,7 +285,6 @@ class LeaderboardScreen extends ConsumerWidget {
       children: List.generate(listEntries.length, (i) {
         final entry = listEntries[i];
         final rank = i + 4;
-        final xp = _computeXp(entry.totalReps, entry.level);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -367,7 +347,7 @@ class LeaderboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    _formatXp(xp),
+                    _formatXp(entry.xp),
                     style: TextStyle(
                       fontFamily: 'ArchivoNarrow',
                       fontSize: 24,
@@ -393,8 +373,13 @@ class LeaderboardScreen extends ConsumerWidget {
     );
   }
 
-  // ─── User Footer ─────────────────────────────────
-  Widget _buildUserFooter() {
+  Widget _buildUserFooter(UserRankInfo? rankInfo) {
+    final rank = rankInfo?.rank ?? 0;
+    final totalCount = rankInfo?.totalCount ?? 1;
+    final totalXp = rankInfo?.totalXp ?? 0;
+    final weeklyXp = rankInfo?.weeklyXp ?? 0;
+    final topPercent = totalCount > 0 ? ((rank / totalCount) * 100).round() : 100;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Container(
@@ -419,7 +404,7 @@ class LeaderboardScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                '#42',
+                '#$rank',
                 style: TextStyle(
                   fontFamily: 'SpaceMono',
                   fontSize: 14,
@@ -442,7 +427,7 @@ class LeaderboardScreen extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  'TOP 12% THIS WEEK',
+                  'TOP $topPercent% | $weeklyXp XP THIS WEEK',
                   style: TextStyle(
                     fontFamily: 'SpaceMono',
                     fontSize: 10,
@@ -457,7 +442,7 @@ class LeaderboardScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '12,400',
+                  _formatXp(totalXp),
                   style: TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 24,
@@ -480,11 +465,6 @@ class LeaderboardScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  // ─── Helpers ─────────────────────────────────────
-  int _computeXp(int totalReps, int level) {
-    return level * 500 + totalReps;
   }
 
   String _formatXp(int value) {

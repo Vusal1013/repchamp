@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import '../../providers/streak_provider.dart';
+import '../../services/supabase/dashboard_service.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
+import '../../widgets/common/streak_badge.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final dailyStats = ref.watch(dailyStatsProvider);
+    final weeklyBreakdown = ref.watch(weeklyBreakdownProvider);
+    final recentActivity = ref.watch(recentActivityProvider);
+    final authUser = ref.watch(currentUserProvider);
+
+    final username = authUser?.userMetadata?['username'] as String? ?? 'PLAYER_01';
+
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
@@ -21,15 +32,15 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildGreeting(),
+                    _buildGreeting(username),
                     const SizedBox(height: 24),
-                    _buildStatsRow(),
+                    _buildStatsRow(dailyStats, ref),
                     const SizedBox(height: 24),
                     _buildQuickActions(context),
                     const SizedBox(height: 24),
-                    _buildWeeklyProgress(),
+                    _buildWeeklyProgress(weeklyBreakdown),
                     const SizedBox(height: 24),
-                    _buildRecentActivity(),
+                    _buildRecentActivity(recentActivity),
                   ],
                 ),
               ),
@@ -41,7 +52,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Header ──────────────────────────────────────
   Widget _buildHeader(BuildContext context) {
     return Container(
       height: 64,
@@ -80,16 +90,6 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(width: 12),
-              Text(
-                'FITDUEL',
-                style: TextStyle(
-                  fontFamily: 'ArchivoNarrow',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.01,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
             ],
           ),
           const Spacer(),
@@ -106,14 +106,13 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _StreakBadge(),
+          const StreakBadge(),
         ],
       ),
     );
   }
 
-  // ─── Greeting ────────────────────────────────────
-  Widget _buildGreeting() {
+  Widget _buildGreeting(String username) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -129,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'PLAYER_01',
+          username.toUpperCase(),
           style: TextStyle(
             fontFamily: 'ArchivoNarrow',
             fontSize: 32,
@@ -142,15 +141,18 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Stats Row ───────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(AsyncValue<DailyStats?> dailyStatsAsync, WidgetRef ref) {
+    final dailyStats = dailyStatsAsync.valueOrNull;
+    final dailyReps = dailyStats?.totalReps ?? 0;
+    final dailyXp = dailyStats?.totalXp ?? 0;
+
     return Row(
       children: [
-        Expanded(child: _statCard('DAILY REPS', '247', const Color(0xFF6CFF80))),
+        Expanded(child: _statCard('DAILY REPS', '$dailyReps', const Color(0xFF6CFF80))),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('XP TODAY', '890', const Color(0xFF568DFF))),
+        Expanded(child: _statCard('XP TODAY', '$dailyXp', const Color(0xFF568DFF))),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('STREAK', '7🔥', const Color(0xFFFFB4AB))),
+        Expanded(child: _statCard('STREAK', '${ref.watch(streakProvider)}🔥', const Color(0xFFFFB4AB))),
       ],
     );
   }
@@ -191,7 +193,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Quick Actions ───────────────────────────────
   Widget _buildQuickActions(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,8 +270,12 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Weekly Progress ─────────────────────────────
-  Widget _buildWeeklyProgress() {
+  Widget _buildWeeklyProgress(AsyncValue<WeeklyBreakdown> weeklyAsync) {
+    final weekly = weeklyAsync.valueOrNull;
+    final totalXp = weekly?.totalXp ?? 0;
+    final dailyXp = weekly?.dailyXp ?? List.filled(7, 0);
+    final labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -295,7 +300,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
               Text(
-                '+2,450 XP',
+                '+${_formatXp(totalXp)} XP',
                 style: TextStyle(
                   fontFamily: 'SpaceMono',
                   fontSize: 12,
@@ -308,22 +313,22 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _dayBar('M', 0.6),
-              _dayBar('T', 0.8),
-              _dayBar('W', 0.4),
-              _dayBar('T', 0.9),
-              _dayBar('F', 0.3),
-              _dayBar('S', 1.0),
-              _dayBar('S', 0.5),
-            ],
+            children: List.generate(7, (i) => _dayBar(labels[i], dailyXp[i])),
           ),
         ],
       ),
     );
   }
 
-  Widget _dayBar(String label, double fill) {
+  String _formatXp(int value) {
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}k';
+    }
+    return value.toString();
+  }
+
+  Widget _dayBar(String label, int xp) {
+    final fill = (xp / 1000).clamp(0.0, 1.0);
     return Column(
       children: [
         Container(
@@ -365,8 +370,9 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ─── Recent Activity ─────────────────────────────
-  Widget _buildRecentActivity() {
+  Widget _buildRecentActivity(AsyncValue<List<RecentActivityItem>> activityAsync) {
+    final activity = activityAsync.valueOrNull ?? [];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -383,16 +389,38 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
         ),
-        _activityItem(Icons.fitness_center_rounded, 'Solo Workout', '45 reps · 12 min', '2h ago'),
-        const SizedBox(height: 8),
-        _activityItem(Icons.sports_kabaddi_rounded, 'Duel vs NeonRival', 'Won by 6 reps', '5h ago'),
-        const SizedBox(height: 8),
-        _activityItem(Icons.emoji_events_rounded, 'League Up', 'Silver III → Gold I', '1d ago'),
+        if (activity.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(8),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'No activity yet. Start your first workout!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: const Color(0xFFBACBB6),
+              ),
+            ),
+          )
+        else
+          ...activity.map((item) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _activityItem(item),
+          )),
       ],
     );
   }
 
-  Widget _activityItem(IconData icon, String title, String subtitle, String time) {
+  Widget _activityItem(RecentActivityItem item) {
+    final icon = _iconForExercise(item.exerciseType);
+    final title = _titleForExercise(item.exerciseType);
+    final timeStr = _timeAgo(item.createdAt);
+    final subtitle = '${item.repCount} reps · ${item.xpEarned} XP';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -434,7 +462,7 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           Text(
-            time,
+            timeStr,
             style: TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 10,
@@ -445,29 +473,56 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _StreakBadge extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final streak = ref.watch(streakProvider);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF201F1F),
-        borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: const Color(0xFF353534)),
-      ),
-      child: Text(
-        '${streak}🔥',
-        style: const TextStyle(
-          fontFamily: 'SpaceMono',
-          fontSize: 12,
-          letterSpacing: 1.2,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF6CFF80),
-        ),
-      ),
-    );
+  IconData _iconForExercise(String type) {
+    switch (type) {
+      case 'push_up':
+        return Icons.self_improvement_rounded;
+      case 'squat':
+        return Icons.accessibility_new_rounded;
+      case 'crunch':
+        return Icons.fitness_center_rounded;
+      case 'pull_up':
+        return Icons.arrow_upward_rounded;
+      case 'plank':
+        return Icons.air_rounded;
+      case 'lunge':
+        return Icons.directions_walk_rounded;
+      case 'shoulder_press':
+        return Icons.pan_tool_rounded;
+      default:
+        return Icons.fitness_center_rounded;
+    }
+  }
+
+  String _titleForExercise(String type) {
+    switch (type) {
+      case 'push_up':
+        return 'Push-up';
+      case 'squat':
+        return 'Squat';
+      case 'crunch':
+        return 'Crunch';
+      case 'pull_up':
+        return 'Pull-up';
+      case 'plank':
+        return 'Plank';
+      case 'lunge':
+        return 'Lunge';
+      case 'shoulder_press':
+        return 'Shoulder Press';
+      default:
+        return type;
+    }
+  }
+
+  String _timeAgo(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${diff.inDays ~/ 7}w ago';
   }
 }
