@@ -12,19 +12,19 @@ class OfflineScreen extends StatefulWidget {
 
 class _OfflineScreenState extends State<OfflineScreen> {
   bool _isOffline = false;
-  StreamSubscription? _sub;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _checkConnectivity();
-    _sub = Stream.periodic(const Duration(seconds: 5), (_) => null).listen((_) => _checkConnectivity());
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _checkConnectivity());
   }
 
   Future<void> _checkConnectivity() async {
     try {
-      final result = await InternetAddress.lookup('google.com');
-      if (mounted) setState(() => _isOffline = result.isEmpty || !result.first.rawAddress.isNotEmpty);
+      await Socket.connect('8.8.8.8', 53, timeout: const Duration(seconds: 3)).then((s) => s.destroy());
+      if (mounted) setState(() => _isOffline = false);
     } catch (_) {
       if (mounted) setState(() => _isOffline = true);
     }
@@ -32,7 +32,7 @@ class _OfflineScreenState extends State<OfflineScreen> {
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -60,7 +60,6 @@ class _OfflineScreenState extends State<OfflineScreen> {
                 const Text(
                   'NO CONNECTION',
                   style: TextStyle(
-                    fontFamily: 'SpaceMono',
                     fontSize: 20,
                     letterSpacing: 3,
                     fontWeight: FontWeight.w700,
@@ -91,7 +90,6 @@ class _OfflineScreenState extends State<OfflineScreen> {
                     child: const Text(
                       'RETRY',
                       style: TextStyle(
-                        fontFamily: 'SpaceMono',
                         fontSize: 14,
                         letterSpacing: 3,
                         fontWeight: FontWeight.w700,
