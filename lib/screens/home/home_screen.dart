@@ -62,36 +62,6 @@ class HomeScreen extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Row(
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF6CFF80), width: 2),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
-                  ),
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: Container(
-                      width: 12, height: 12,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF6CFF80),
-                        border: Border.all(color: const Color(0xFF131313), width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 12),
-            ],
-          ),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/friends'),

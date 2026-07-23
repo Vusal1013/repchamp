@@ -157,29 +157,14 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
       ),
       child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF6CFF80), width: 2),
-                ),
-                child: const Icon(Icons.person, size: 18, color: Color(0xFF6CFF80)),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'PLAYER_01',
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 12,
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFE5E2E1),
-                ),
-              ),
-            ],
+          Text(
+            'DUEL LOBBY',
+            style: TextStyle(
+              fontSize: 14,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFE5E2E1),
+            ),
           ),
           const Spacer(),
           const StreakBadge(),

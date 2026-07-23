@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/duel_provider.dart';
 import '../../services/supabase/leaderboard_service.dart';
+import '../../services/supabase/dashboard_service.dart';
+import '../../services/supabase/supabase_client.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 import '../../widgets/common/streak_badge.dart';
 
@@ -17,13 +19,49 @@ final userRankProvider = FutureProvider<UserRankInfo?>((ref) async {
   return service.getUserRank(userId);
 });
 
-class LeaderboardScreen extends ConsumerWidget {
+final friendLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return [];
+  final data = await SupabaseClientManager.client
+      .rpc('get_friend_leaderboard', params: {'user_id': userId, 'limit_count': 20});
+  return (data as List<dynamic>).map((e) {
+    final row = e as Map<String, dynamic>;
+    return LeaderboardEntry(
+      userId: row['friend_id'] as String,
+      username: row['username'] as String,
+      avatarUrl: null,
+      totalReps: (row['total_reps'] as num).toInt(),
+      totalSessions: 0,
+      level: (row['level'] as num).toInt(),
+      streak: (row['streak'] as num?)?.toInt() ?? 0,
+      xp: 0,
+    );
+  }).toList();
+});
+
+final weeklyBreakdownLeaderboardProvider = FutureProvider<WeeklyBreakdown>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return const WeeklyBreakdown(dailyXp: [0, 0, 0, 0, 0, 0, 0]);
+  final service = DashboardService();
+  return service.getWeeklyBreakdown(userId);
+});
+
+class LeaderboardScreen extends ConsumerStatefulWidget {
   const LeaderboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
+  int _selectedTab = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final leaderboard = ref.watch(leaderboardProvider);
     final userRank = ref.watch(userRankProvider);
+    final friendLeaderboard = ref.watch(friendLeaderboardProvider);
+    final weeklyBreakdown = ref.watch(weeklyBreakdownLeaderboardProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
@@ -32,18 +70,7 @@ class LeaderboardScreen extends ConsumerWidget {
           children: [
             _buildHeader(),
             Expanded(
-              child: leaderboard.when(
-                data: (entries) => _buildBody(entries, userRank.valueOrNull),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
-                ),
-                error: (_, __) => const Center(
-                  child: Text(
-                    'Failed to load leaderboard',
-                    style: TextStyle(color: Color(0xFFFFB4AB)),
-                  ),
-                ),
-              ),
+              child: _buildBody(leaderboard, userRank, friendLeaderboard, weeklyBreakdown),
             ),
             const FitDuelBottomNav(activeTab: NavTab.leaderboard),
           ],
@@ -58,41 +85,10 @@ class LeaderboardScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: const BoxDecoration(
         color: Color(0xFF131313),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFF353534)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFF353534))),
       ),
       child: Row(
         children: [
-          Row(
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF6CFF80), width: 2),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
-                  ),
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: Container(
-                      width: 12, height: 12,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF6CFF80),
-                        border: Border.all(color: const Color(0xFF131313), width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
           const Spacer(),
           const StreakBadge(),
         ],
@@ -100,7 +96,12 @@ class LeaderboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(List<LeaderboardEntry> entries, UserRankInfo? rankInfo) {
+  Widget _buildBody(
+    AsyncValue<List<LeaderboardEntry>> leaderboard,
+    AsyncValue<UserRankInfo?> userRank,
+    AsyncValue<List<LeaderboardEntry>> friendLeaderboard,
+    AsyncValue<WeeklyBreakdown> weeklyBreakdown,
+  ) {
     return Stack(
       children: [
         SingleChildScrollView(
@@ -109,21 +110,26 @@ class LeaderboardScreen extends ConsumerWidget {
             children: [
               _buildTabs(),
               const SizedBox(height: 32),
-              _buildPodium(entries),
-              const SizedBox(height: 32),
-              _buildRankedList(entries),
+              if (_selectedTab == 0)
+                _buildGlobalContent(leaderboard)
+              else if (_selectedTab == 1)
+                _buildFriendsContent(friendLeaderboard)
+              else
+                _buildWeeklyContent(weeklyBreakdown),
             ],
           ),
         ),
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: _buildUserFooter(rankInfo),
-        ),
+        if (_selectedTab == 0)
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: _buildUserFooter(userRank.valueOrNull),
+          ),
       ],
     );
   }
 
   Widget _buildTabs() {
+    final labels = ['GLOBAL', 'FRIENDS', 'WEEKLY'];
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -131,66 +137,174 @@ class LeaderboardScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        children: List.generate(3, (i) {
+          final selected = _selectedTab == i;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedTab = i),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: selected ? BoxDecoration(
+                  color: const Color(0xFF6CFF80).withAlpha(51),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF6CFF80).withAlpha(77)),
+                ) : null,
+                child: Text(
+                  labels[i],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? const Color(0xFF007226) : const Color(0xFFBACBB6),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildGlobalContent(AsyncValue<List<LeaderboardEntry>> leaderboard) {
+    return leaderboard.when(
+      data: (entries) => Column(
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6CFF80).withAlpha(51),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF6CFF80).withAlpha(77)),
-              ),
-              child: Text(
-                'GLOBAL',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 12,
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF007226),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'FRIENDS',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 12,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFBACBB6),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  'WEEKLY',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 12,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFBACBB6),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildPodium(entries),
+          const SizedBox(height: 32),
+          _buildRankedList(entries),
         ],
       ),
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
+      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
+    );
+  }
+
+  Widget _buildFriendsContent(AsyncValue<List<LeaderboardEntry>> friendLeaderboard) {
+    return friendLeaderboard.when(
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 60),
+            child: Column(
+              children: [
+                Icon(Icons.people_outline_rounded, size: 64, color: const Color(0xFF353534)),
+                const SizedBox(height: 16),
+                Text('NO FRIENDS YET', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                const SizedBox(height: 8),
+                Text('Add friends to see them here', style: TextStyle(fontSize: 12, color: const Color(0xFF859581))),
+              ],
+            ),
+          );
+        }
+        return _buildFriendList(entries);
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
+      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
+    );
+  }
+
+  Widget _buildWeeklyContent(AsyncValue<WeeklyBreakdown> weeklyBreakdown) {
+    return weeklyBreakdown.when(
+      data: (weekly) {
+        final dailyXp = weekly.dailyXp;
+        final total = weekly.totalXp;
+        final maxDay = dailyXp.reduce((a, b) => a > b ? a : b);
+        final labels = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Column(
+                children: [
+                  Text('WEEKLY XP', style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                  const SizedBox(height: 4),
+                  Text('+$total', style: TextStyle(fontSize: 48, fontWeight: FontWeight.w700, color: const Color(0xFF6CFF80))),
+                  Text('XP THIS WEEK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              height: 160,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(7, (i) {
+                  final xp = dailyXp[i];
+                  final height = maxDay > 0 ? (xp / maxDay) * 140 : 0.0;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text('$xp', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                          const SizedBox(height: 4),
+                          Container(
+                            height: height.clamp(4.0, 140.0),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6CFF80),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(labels[i], style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF859581))),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
+      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
+    );
+  }
+
+  Widget _buildFriendList(List<LeaderboardEntry> entries) {
+    return Column(
+      children: List.generate(entries.length, (i) {
+        final entry = entries[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Text(
+                '${i + 1}',
+                style: TextStyle(fontFamily: 'SpaceMono', fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6)),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF353534))),
+                child: const Icon(Icons.person, size: 22, color: Color(0xFFBACBB6)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.username, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE5E2E1))),
+                    const SizedBox(height: 2),
+                    Text('LEVEL ${entry.level}', style: TextStyle(fontSize: 10, color: const Color(0xFFBACBB6))),
+                  ],
+                ),
+              ),
+              Text(_formatReps(entry.totalReps), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF6CFF80))),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -239,37 +353,12 @@ class LeaderboardScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                   decoration: BoxDecoration(color: colors[i], borderRadius: BorderRadius.circular(9999)),
-                  child: Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontFamily: 'SpaceMono',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0E0E0E),
-                    ),
-                  ),
+                  child: Text(labels[i], style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF0E0E0E))),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  entry.username,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: i == 1 ? const Color(0xFF6CFF80) : const Color(0xFFE5E2E1),
-                  ),
-                ),
+                Text(entry.username, textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: i == 1 ? const Color(0xFF6CFF80) : const Color(0xFFE5E2E1))),
                 const SizedBox(height: 4),
-                Text(
-                  _formatXp(entry.xp),
-                  style: TextStyle(
-                    fontFamily: 'ArchivoNarrow',
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: colors[i],
-                  ),
-                ),
+                Text(_formatXp(entry.xp), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: colors[i])),
               ],
             ),
           ),
@@ -295,27 +384,11 @@ class LeaderboardScreen extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: 24,
-                child: Text(
-                  '$rank',
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFBACBB6),
-                  ),
-                ),
-              ),
+              SizedBox(width: 24, child: Text('$rank', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6)))),
               const SizedBox(width: 16),
               Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF353534)),
-                ),
-                clipBehavior: Clip.antiAlias,
+                width: 40, height: 40,
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF353534))),
                 child: const Icon(Icons.person, size: 22, color: Color(0xFFBACBB6)),
               ),
               const SizedBox(width: 12),
@@ -323,47 +396,17 @@ class LeaderboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      entry.username,
-                      style: TextStyle(
-                        fontFamily: 'SpaceMono',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFE5E2E1),
-                      ),
-                    ),
+                    Text(entry.username, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE5E2E1))),
                     const SizedBox(height: 2),
-                    Text(
-                      '${_formatReps(entry.totalReps)} REPS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: const Color(0xFFBACBB6),
-                      ),
-                    ),
+                    Text('${_formatReps(entry.totalReps)} REPS', style: TextStyle(fontSize: 10, color: const Color(0xFFBACBB6))),
                   ],
                 ),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    _formatXp(entry.xp),
-                    style: TextStyle(
-                      fontFamily: 'ArchivoNarrow',
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFE5E2E1),
-                    ),
-                  ),
-                  Text(
-                    'XP',
-                    style: TextStyle(
-                      fontFamily: 'SpaceMono',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF6CFF80),
-                    ),
-                  ),
+                  Text(_formatXp(entry.xp), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: const Color(0xFFE5E2E1))),
+                  Text('XP', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF6CFF80))),
                 ],
               ),
             ],
@@ -387,78 +430,30 @@ class LeaderboardScreen extends ConsumerWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF6CFF80),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF39FF6A).withAlpha(128),
-              blurRadius: 25,
-            ),
-          ],
+          boxShadow: [BoxShadow(color: const Color(0xFF39FF6A).withAlpha(128), blurRadius: 25)],
           border: Border.all(color: const Color(0xFF00E556)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00390F),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '#$rank',
-                style: TextStyle(
-                  fontFamily: 'SpaceMono',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6CFF80),
-                ),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFF00390F), borderRadius: BorderRadius.circular(4)),
+              child: Text('#$rank', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF6CFF80))),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'YOU',
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF00390F),
-                  ),
-                ),
-                Text(
-                  'TOP $topPercent% | $weeklyXp XP THIS WEEK',
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF00390F).withAlpha(204),
-                  ),
-                ),
+                Text('YOU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF00390F))),
+                Text('TOP $topPercent% | $weeklyXp XP THIS WEEK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF00390F).withAlpha(204))),
               ],
             ),
             const Spacer(),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  _formatXp(totalXp),
-                  style: TextStyle(
-                    fontFamily: 'ArchivoNarrow',
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF00390F),
-                  ),
-                ),
-                Text(
-                  'TOTAL XP',
-                  style: TextStyle(
-                    fontFamily: 'SpaceMono',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF00390F).withAlpha(204),
-                  ),
-                ),
+                Text(_formatXp(totalXp), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: const Color(0xFF00390F))),
+                Text('TOTAL XP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF00390F).withAlpha(204))),
               ],
             ),
           ],
@@ -468,9 +463,7 @@ class LeaderboardScreen extends ConsumerWidget {
   }
 
   String _formatXp(int value) {
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}k';
-    }
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
     return value.toString();
   }
 

@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../providers/duel_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/supabase/profile_service.dart';
 import '../../services/supabase/supabase_client.dart';
+import '../../widgets/common/avatar_confirm_dialog.dart';
 
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -32,30 +34,44 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _pickAvatar() async {
+  Future<void> _pickAndConfirmAvatar() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512);
+    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024);
     if (picked == null) return;
+
+    final file = File(picked.path);
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AvatarConfirmDialog(imageFile: file),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
     try {
       final userId = ref.read(currentUserIdProvider);
       if (userId == null) return;
 
-      final file = File(picked.path);
       final ext = picked.path.split('.').last;
       final path = '$userId/avatar.$ext';
 
-      await SupabaseClientManager.client.storage.from('avatars').upload(path, file, fileOptions: FileOptions(upsert: true));
+      await SupabaseClientManager.client.storage.from('avatars').upload(
+        path, file,
+        fileOptions: const FileOptions(upsert: true),
+      );
       final url = SupabaseClientManager.client.storage.from('avatars').getPublicUrl(path);
 
       await ProfileService().updateProfile(userId: userId, avatarUrl: url);
+      if (!mounted) return;
       setState(() {
-        _success = 'Avatar updated!';
+        _success = AppLocalizations.of(context).translate('avatar_updated', fallback: 'Avatar updated!');
         _error = null;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = AppLocalizations.of(context).translate('avatar_upload_error', fallback: 'Failed to upload avatar'));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -64,23 +80,20 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   Future<void> _updateUsername() async {
     final username = _usernameController.text.trim();
     if (username.isEmpty) {
-      setState(() => _error = 'Username cannot be empty');
+      setState(() => _error = AppLocalizations.of(context).translate('username_empty', fallback: 'Username cannot be empty'));
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-      _success = null;
-    });
+    setState(() { _isLoading = true; _error = null; _success = null; });
 
     try {
       final userId = ref.read(currentUserIdProvider);
       if (userId == null) return;
 
       await ProfileService().updateProfile(userId: userId, username: username);
+      if (!mounted) return;
       setState(() {
-        _success = 'Username updated!';
+        _success = AppLocalizations.of(context).translate('username_updated', fallback: 'Username updated!');
         _error = null;
       });
       _usernameController.clear();
@@ -96,24 +109,21 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final confirm = _confirmPasswordController.text;
 
     if (password.isEmpty || password.length < 6) {
-      setState(() => _error = 'Password must be at least 6 characters');
+      setState(() => _error = AppLocalizations.of(context).translate('password_short', fallback: 'Password must be at least 6 characters'));
       return;
     }
     if (password != confirm) {
-      setState(() => _error = 'Passwords do not match');
+      setState(() => _error = AppLocalizations.of(context).translate('passwords_no_match', fallback: 'Passwords do not match'));
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-      _success = null;
-    });
+    setState(() { _isLoading = true; _error = null; _success = null; });
 
     try {
       await SupabaseClientManager.client.auth.updateUser(UserAttributes(password: password));
+      if (!mounted) return;
       setState(() {
-        _success = 'Password updated!';
+        _success = AppLocalizations.of(context).translate('password_updated', fallback: 'Password updated!');
         _error = null;
       });
       _passwordController.clear();
@@ -126,21 +136,22 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   }
 
   Future<void> _logout() async {
+    final t = (String key, {String? fb}) => AppLocalizations.of(context).translate(key, fallback: fb);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Sign Out', style: TextStyle(color: Color(0xFFE5E2E1))),
-        content: const Text('Are you sure you want to sign out?', style: TextStyle(color: Color(0xFFBACBB6))),
+        title: Text(t('sign_out_confirm_title', fb: 'Sign Out'), style: const TextStyle(color: Color(0xFFE5E2E1))),
+        content: Text(t('sign_out_confirm_body', fb: 'Are you sure you want to sign out?'), style: const TextStyle(color: Color(0xFFBACBB6))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFFBACBB6))),
+            child: Text(t('cancel', fb: 'Cancel'), style: const TextStyle(color: Color(0xFFBACBB6))),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sign Out', style: TextStyle(color: Color(0xFFFFB4AB))),
+            child: Text(t('sign_out', fb: 'Sign Out'), style: const TextStyle(color: Color(0xFFFFB4AB))),
           ),
         ],
       ),
@@ -155,13 +166,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final isDark = settings.themeMode == ThemeMode.dark || (settings.themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
+    final t = (String key, {String? fb}) => AppLocalizations.of(context).translate(key, fallback: fb);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF131313) : const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF131313) : Colors.white,
         title: Text(
-          'SETTINGS',
+          t('profile_settings', fb: 'SETTINGS'),
           style: TextStyle(
             fontSize: 14,
             letterSpacing: 2,
@@ -179,17 +191,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Avatar ──────────────────────────────
-            _sectionHeader('AVATAR', isDark),
+            _sectionHeader(t('avatar', fb: 'AVATAR'), isDark),
             const SizedBox(height: 8),
             Center(
               child: GestureDetector(
-                onTap: _pickAvatar,
+                onTap: _pickAndConfirmAvatar,
                 child: Stack(
                   children: [
                     Container(
-                      width: 96,
-                      height: 96,
+                      width: 96, height: 96,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: const Color(0xFF6CFF80), width: 2),
@@ -201,10 +211,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       bottom: 0, right: 0,
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6CFF80),
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFF6CFF80), shape: BoxShape.circle),
                         child: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF00390F)),
                       ),
                     ),
@@ -215,24 +222,23 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             const SizedBox(height: 4),
             Center(
               child: Text(
-                'Tap to change avatar',
+                t('tap_to_change_avatar', fb: 'Tap to change avatar'),
                 style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666)),
               ),
             ),
 
             const SizedBox(height: 32),
 
-            // ─── Account ──────────────────────────────
-            _sectionHeader('ACCOUNT', isDark),
+            _sectionHeader(t('account', fb: 'ACCOUNT'), isDark),
             const SizedBox(height: 8),
             _buildInputField(
               controller: _usernameController,
-              hint: 'New username',
+              hint: t('new_username', fb: 'New username'),
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildButton(
-              label: 'UPDATE USERNAME',
+              label: t('update_username', fb: 'UPDATE USERNAME'),
               onPressed: _isLoading ? null : _updateUsername,
               isDark: isDark,
             ),
@@ -240,53 +246,46 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             const SizedBox(height: 16),
             _buildInputField(
               controller: _passwordController,
-              hint: 'New password',
+              hint: t('new_password', fb: 'New password'),
               obscure: true,
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildInputField(
               controller: _confirmPasswordController,
-              hint: 'Confirm password',
+              hint: t('confirm_password', fb: 'Confirm password'),
               obscure: true,
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildButton(
-              label: 'UPDATE PASSWORD',
+              label: t('update_password', fb: 'UPDATE PASSWORD'),
               onPressed: _isLoading ? null : _updatePassword,
               isDark: isDark,
             ),
 
             const SizedBox(height: 32),
 
-            // ─── Appearance ──────────────────────────
-            _sectionHeader('APPEARANCE', isDark),
+            _sectionHeader(t('appearance', fb: 'APPEARANCE'), isDark),
             const SizedBox(height: 8),
             _buildThemeSelector(isDark, settings),
 
             const SizedBox(height: 32),
 
-            // ─── Language ────────────────────────────
-            _sectionHeader('LANGUAGE', isDark),
+            _sectionHeader(t('language', fb: 'LANGUAGE'), isDark),
             const SizedBox(height: 8),
             _buildLanguageSelector(isDark, settings),
 
             const SizedBox(height: 32),
 
-            // ─── Sign Out ────────────────────────────
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: _logout,
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: Text(
-                  'SIGN OUT',
-                  style: TextStyle(
-                    fontSize: 12,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  t('sign_out', fb: 'SIGN OUT'),
+                  style: const TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.w700),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFFFB4AB),
@@ -299,16 +298,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
             const SizedBox(height: 24),
 
-            // ─── Messages ────────────────────────────
             if (_error != null) _buildMessageBanner(_error!, isError: true, isDark: isDark),
             if (_success != null) _buildMessageBanner(_success!, isError: false, isDark: isDark),
             if (_isLoading) ...[
               const SizedBox(height: 16),
-              Center(
-                child: CircularProgressIndicator(
-                  color: isDark ? const Color(0xFF6CFF80) : const Color(0xFF1B5E20),
-                ),
-              ),
+              Center(child: CircularProgressIndicator(color: isDark ? const Color(0xFF6CFF80) : const Color(0xFF1B5E20))),
             ],
           ],
         ),
@@ -316,15 +310,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  // ─── Shared Widgets ────────────────────────────────
-
   Widget _sectionHeader(String text, bool isDark) {
     return Text(
       text,
       style: TextStyle(
-        fontSize: 10,
-        letterSpacing: 1,
-        fontWeight: FontWeight.w700,
+        fontSize: 10, letterSpacing: 1, fontWeight: FontWeight.w700,
         color: isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666),
       ),
     );
@@ -356,11 +346,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  Widget _buildButton({
-    required String label,
-    required VoidCallback? onPressed,
-    required bool isDark,
-  }) {
+  Widget _buildButton({required String label, required VoidCallback? onPressed, required bool isDark}) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -371,23 +357,16 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            letterSpacing: 2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        child: Text(label, style: const TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.w700)),
       ),
     );
   }
 
   Widget _buildThemeSelector(bool isDark, SettingsState settings) {
     final options = [
-      (ThemeMode.dark, 'Dark', Icons.dark_mode),
-      (ThemeMode.light, 'Light', Icons.light_mode),
-      (ThemeMode.system, 'System', Icons.settings_brightness),
+      (ThemeMode.dark, 'dark', Icons.dark_mode),
+      (ThemeMode.light, 'light', Icons.light_mode),
+      (ThemeMode.system, 'system', Icons.settings_brightness),
     ];
 
     return Container(
@@ -398,7 +377,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       ),
       child: Column(
         children: options.map((opt) {
-          final (mode, label, icon) = opt;
+          final (mode, key, icon) = opt;
           final selected = settings.themeMode == mode;
           return InkWell(
             onTap: () => ref.read(settingsProvider.notifier).setThemeMode(mode),
@@ -410,11 +389,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   Icon(icon, size: 20, color: selected ? const Color(0xFF6CFF80) : (isDark ? const Color(0xFF859581) : const Color(0xFFAAAAAA))),
                   const SizedBox(width: 12),
                   Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666)),
-                    ),
+                    AppLocalizations.of(context).translate(key, fallback: key[0].toUpperCase() + key.substring(1)),
+                    style: TextStyle(fontSize: 14, color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666))),
                   ),
                   const Spacer(),
                   if (selected)
@@ -430,8 +406,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
   Widget _buildLanguageSelector(bool isDark, SettingsState settings) {
     final options = [
-      (const Locale('en'), 'English', '🇬🇧'),
-      (const Locale('tr'), 'Türkçe', '🇹🇷'),
+      (const Locale('en'), 'english', '🇬🇧'),
+      (const Locale('tr'), 'turkish', '🇹🇷'),
+      (const Locale('es'), 'spanish', '🇪🇸'),
+      (const Locale('fr'), 'french', '🇫🇷'),
+      (const Locale('de'), 'german', '🇩🇪'),
+      (const Locale('ru'), 'russian', '🇷🇺'),
+      (const Locale('pt'), 'portuguese', '🇵🇹'),
+      (const Locale('ar'), 'arabic', '🇸🇦'),
+      (const Locale('zh'), 'chinese', '🇨🇳'),
     ];
 
     return Container(
@@ -442,7 +425,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       ),
       child: Column(
         children: options.map((opt) {
-          final (locale, label, flag) = opt;
+          final (locale, key, flag) = opt;
           final selected = settings.locale.languageCode == locale.languageCode;
           return InkWell(
             onTap: () => ref.read(settingsProvider.notifier).setLocale(locale),
@@ -454,11 +437,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   Text(flag, style: const TextStyle(fontSize: 18)),
                   const SizedBox(width: 12),
                   Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666)),
-                    ),
+                    AppLocalizations.of(context).translate(key, fallback: key),
+                    style: TextStyle(fontSize: 14, color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666))),
                   ),
                   const Spacer(),
                   if (selected)

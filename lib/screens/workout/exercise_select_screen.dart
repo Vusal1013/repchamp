@@ -83,20 +83,6 @@ class ExerciseSelectScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF6CFF80), width: 2),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: const Icon(Icons.person, size: 22, color: Color(0xFF6CFF80)),
-              ),
-            ],
-          ),
           const Spacer(),
           const StreakBadge(),
         ],
