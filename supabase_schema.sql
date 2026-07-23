@@ -361,6 +361,23 @@ $$;
 -- 5. FUNCTIONS (RPC)
 -- ============================================================
 
+-- Idempotent drops: these functions may have been created with different
+-- return types in previous runs, so drop before re-creating.
+drop function if exists get_leaderboard(int);
+drop function if exists get_user_rank(uuid);
+drop function if exists get_friend_leaderboard(uuid, int);
+drop function if exists get_challenge_leaderboard(text, int);
+drop function if exists add_xp(uuid, int);
+drop function if exists get_daily_stats(uuid);
+drop function if exists get_weekly_breakdown(uuid);
+drop function if exists get_weekly_xp(uuid);
+drop function if exists get_recent_activity(uuid, int);
+drop function if exists get_profile_duel_stats(uuid);
+drop function if exists get_recent_duels(uuid, int);
+drop function if exists get_total_reps(uuid);
+drop function if exists get_user_achievements(uuid);
+drop function if exists handle_new_user() cascade;
+
 -- 5a. Leaderboard: top users by total XP
 create or replace function get_leaderboard(limit_count int default 20)
 returns table (
