@@ -34,6 +34,18 @@ create table if not exists workout_sessions (
   created_at timestamptz default now()
 );
 
+-- Migration: add xp_earned column if missing (table may already exist)
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_name = 'workout_sessions' and column_name = 'xp_earned'
+  ) then
+    alter table workout_sessions add column xp_earned int default 0;
+  end if;
+end;
+$$;
+
 -- 1c. Duel rooms
 create table if not exists duel_rooms (
   id uuid primary key default gen_random_uuid(),
