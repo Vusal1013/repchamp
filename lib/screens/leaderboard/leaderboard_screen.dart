@@ -73,7 +73,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             _buildHeader(),
             Expanded(
               child: leaderboard.when(
-                data: (entries) => _buildBody(entries, userRank.valueOrNull, ref),
+                data: (entries) => _buildBody(entries, userRank.valueOrNull, ref,
+                    friendLeaderboard, weeklyBreakdown),
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
                 ),
@@ -109,7 +110,9 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _buildBody(List<LeaderboardEntry> entries, UserRankInfo? rankInfo, WidgetRef ref) {
+  Widget _buildBody(List<LeaderboardEntry> entries, UserRankInfo? rankInfo, WidgetRef ref,
+      AsyncValue<List<LeaderboardEntry>> friendLeaderboard,
+      AsyncValue<WeeklyBreakdown> weeklyBreakdown) {
     if (_selectedTab == 0) {
       return Stack(
         children: [
