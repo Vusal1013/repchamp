@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/localization/app_localizations.dart';
 import '../../providers/duel_provider.dart';
+import '../../providers/localization_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../services/supabase/profile_service.dart';
 import '../../services/supabase/supabase_client.dart';
 import '../../widgets/common/avatar_confirm_dialog.dart';
@@ -53,25 +54,38 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     setState(() => _isLoading = true);
     try {
       final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
+      if (userId == null) {
+        setState(() => _error = 'avatar_upload_error');
+        return;
+      }
 
-      final ext = picked.path.split('.').last;
+      final ext = picked.path.contains('.') ? picked.path.split('.').last.toLowerCase() : 'jpg';
+      final validExts = {'jpg', 'jpeg', 'png', 'webp', 'gif'};
+      if (!validExts.contains(ext)) {
+        setState(() => _error = 'invalid_image_format');
+        return;
+      }
+
+      final mimeType = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg'
+          : ext == 'png' ? 'image/png'
+          : ext == 'webp' ? 'image/webp'
+          : 'image/gif';
+
       final path = '$userId/avatar.$ext';
 
-      await SupabaseClientManager.client.storage.from('avatars').upload(
-        path, file,
-        fileOptions: const FileOptions(upsert: true),
-      );
+      await SupabaseClientManager.client.storage
+          .from('avatars')
+          .upload(path, file, fileOptions: FileOptions(upsert: true, contentType: mimeType));
       final url = SupabaseClientManager.client.storage.from('avatars').getPublicUrl(path);
 
       await ProfileService().updateProfile(userId: userId, avatarUrl: url);
       if (!mounted) return;
       setState(() {
-        _success = AppLocalizations.of(context).translate('avatar_updated', fallback: 'Avatar updated!');
+        _success = 'avatar_updated';
         _error = null;
       });
     } catch (e) {
-      setState(() => _error = AppLocalizations.of(context).translate('avatar_upload_error', fallback: 'Failed to upload avatar'));
+      setState(() => _error = 'avatar_upload_error');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -80,7 +94,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   Future<void> _updateUsername() async {
     final username = _usernameController.text.trim();
     if (username.isEmpty) {
-      setState(() => _error = AppLocalizations.of(context).translate('username_empty', fallback: 'Username cannot be empty'));
+      setState(() => _error = 'username_empty');
       return;
     }
 
@@ -93,7 +107,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       await ProfileService().updateProfile(userId: userId, username: username);
       if (!mounted) return;
       setState(() {
-        _success = AppLocalizations.of(context).translate('username_updated', fallback: 'Username updated!');
+        _success = 'username_updated';
         _error = null;
       });
       _usernameController.clear();
@@ -109,11 +123,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final confirm = _confirmPasswordController.text;
 
     if (password.isEmpty || password.length < 6) {
-      setState(() => _error = AppLocalizations.of(context).translate('password_short', fallback: 'Password must be at least 6 characters'));
+      setState(() => _error = 'password_short');
       return;
     }
     if (password != confirm) {
-      setState(() => _error = AppLocalizations.of(context).translate('passwords_no_match', fallback: 'Passwords do not match'));
+      setState(() => _error = 'passwords_no_match');
       return;
     }
 
@@ -123,7 +137,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       await SupabaseClientManager.client.auth.updateUser(UserAttributes(password: password));
       if (!mounted) return;
       setState(() {
-        _success = AppLocalizations.of(context).translate('password_updated', fallback: 'Password updated!');
+        _success = 'password_updated';
         _error = null;
       });
       _passwordController.clear();
@@ -136,22 +150,21 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final t = (String key, {String? fb}) => AppLocalizations.of(context).translate(key, fallback: fb);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(t('sign_out_confirm_title', fb: 'Sign Out'), style: const TextStyle(color: Color(0xFFE5E2E1))),
-        content: Text(t('sign_out_confirm_body', fb: 'Are you sure you want to sign out?'), style: const TextStyle(color: Color(0xFFBACBB6))),
+        title: Text(ref.tr('sign_out_confirm_title'), style: TextStyle(color: Color(0xFFE5E2E1))),
+        content: Text(ref.tr('sign_out_confirm_body'), style: TextStyle(color: Color(0xFFBACBB6))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(t('cancel', fb: 'Cancel'), style: const TextStyle(color: Color(0xFFBACBB6))),
+            child: Text(ref.tr('cancel'), style: TextStyle(color: Color(0xFFBACBB6))),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(t('sign_out', fb: 'Sign Out'), style: const TextStyle(color: Color(0xFFFFB4AB))),
+            child: Text(ref.tr('sign_out'), style: TextStyle(color: Color(0xFFFFB4AB))),
           ),
         ],
       ),
@@ -166,14 +179,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final isDark = settings.themeMode == ThemeMode.dark || (settings.themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
-    final t = (String key, {String? fb}) => AppLocalizations.of(context).translate(key, fallback: fb);
+    final t = ref.tr;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF131313) : const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF131313) : Colors.white,
         title: Text(
-          t('profile_settings', fb: 'SETTINGS'),
+          t('profile_settings'),
           style: TextStyle(
             fontSize: 14,
             letterSpacing: 2,
@@ -191,7 +204,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionHeader(t('avatar', fb: 'AVATAR'), isDark),
+            _sectionHeader(t('avatar'), isDark),
             const SizedBox(height: 8),
             Center(
               child: GestureDetector(
@@ -222,23 +235,23 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             const SizedBox(height: 4),
             Center(
               child: Text(
-                t('tap_to_change_avatar', fb: 'Tap to change avatar'),
+                t('tap_to_change_avatar'),
                 style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666)),
               ),
             ),
 
             const SizedBox(height: 32),
 
-            _sectionHeader(t('account', fb: 'ACCOUNT'), isDark),
+            _sectionHeader(t('account'), isDark),
             const SizedBox(height: 8),
             _buildInputField(
               controller: _usernameController,
-              hint: t('new_username', fb: 'New username'),
+              hint: t('new_username'),
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildButton(
-              label: t('update_username', fb: 'UPDATE USERNAME'),
+              label: t('update_username'),
               onPressed: _isLoading ? null : _updateUsername,
               isDark: isDark,
             ),
@@ -246,33 +259,33 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             const SizedBox(height: 16),
             _buildInputField(
               controller: _passwordController,
-              hint: t('new_password', fb: 'New password'),
+              hint: t('new_password'),
               obscure: true,
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildInputField(
               controller: _confirmPasswordController,
-              hint: t('confirm_password', fb: 'Confirm password'),
+              hint: t('confirm_password'),
               obscure: true,
               isDark: isDark,
             ),
             const SizedBox(height: 12),
             _buildButton(
-              label: t('update_password', fb: 'UPDATE PASSWORD'),
+              label: t('update_password'),
               onPressed: _isLoading ? null : _updatePassword,
               isDark: isDark,
             ),
 
             const SizedBox(height: 32),
 
-            _sectionHeader(t('appearance', fb: 'APPEARANCE'), isDark),
+            _sectionHeader(t('appearance'), isDark),
             const SizedBox(height: 8),
             _buildThemeSelector(isDark, settings),
 
             const SizedBox(height: 32),
 
-            _sectionHeader(t('language', fb: 'LANGUAGE'), isDark),
+            _sectionHeader(t('language'), isDark),
             const SizedBox(height: 8),
             _buildLanguageSelector(isDark, settings),
 
@@ -284,8 +297,12 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 onPressed: _logout,
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: Text(
-                  t('sign_out', fb: 'SIGN OUT'),
-                  style: const TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.w700),
+                  t('sign_out'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFFFB4AB),
@@ -298,8 +315,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
             const SizedBox(height: 24),
 
-            if (_error != null) _buildMessageBanner(_error!, isError: true, isDark: isDark),
-            if (_success != null) _buildMessageBanner(_success!, isError: false, isDark: isDark),
+            if (_error != null) _buildMessageBanner(t(_error!), isError: true, isDark: isDark),
+            if (_success != null) _buildMessageBanner(t(_success!), isError: false, isDark: isDark),
             if (_isLoading) ...[
               const SizedBox(height: 16),
               Center(child: CircularProgressIndicator(color: isDark ? const Color(0xFF6CFF80) : const Color(0xFF1B5E20))),
@@ -364,9 +381,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
   Widget _buildThemeSelector(bool isDark, SettingsState settings) {
     final options = [
-      (ThemeMode.dark, 'dark', Icons.dark_mode),
-      (ThemeMode.light, 'light', Icons.light_mode),
-      (ThemeMode.system, 'system', Icons.settings_brightness),
+      (ThemeMode.dark, ref.tr('dark'), Icons.dark_mode),
+      (ThemeMode.light, ref.tr('light'), Icons.light_mode),
+      (ThemeMode.system, ref.tr('system'), Icons.settings_brightness),
     ];
 
     return Container(
@@ -389,7 +406,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   Icon(icon, size: 20, color: selected ? const Color(0xFF6CFF80) : (isDark ? const Color(0xFF859581) : const Color(0xFFAAAAAA))),
                   const SizedBox(width: 12),
                   Text(
-                    AppLocalizations.of(context).translate(key, fallback: key[0].toUpperCase() + key.substring(1)),
+                    ref.tr(key),
                     style: TextStyle(fontSize: 14, color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666))),
                   ),
                   const Spacer(),
@@ -404,19 +421,32 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  Widget _buildLanguageSelector(bool isDark, SettingsState settings) {
-    final options = [
-      (const Locale('en'), 'english', '🇬🇧'),
-      (const Locale('tr'), 'turkish', '🇹🇷'),
-      (const Locale('es'), 'spanish', '🇪🇸'),
-      (const Locale('fr'), 'french', '🇫🇷'),
-      (const Locale('de'), 'german', '🇩🇪'),
-      (const Locale('ru'), 'russian', '🇷🇺'),
-      (const Locale('pt'), 'portuguese', '🇵🇹'),
-      (const Locale('ar'), 'arabic', '🇸🇦'),
-      (const Locale('zh'), 'chinese', '🇨🇳'),
-    ];
+  static const _allLocales = [
+    (Locale('en'), 'english', '🇬🇧'),
+    (Locale('az'), 'azerbaijani', '🇦🇿'),
+    (Locale('tr'), 'turkish', '🇹🇷'),
+    (Locale('de'), 'german', '🇩🇪'),
+    (Locale('es'), 'spanish', '🇪🇸'),
+    (Locale('fr'), 'french', '🇫🇷'),
+    (Locale('it'), 'italian', '🇮🇹'),
+    (Locale('pt'), 'portuguese', '🇵🇹'),
+    (Locale('ru'), 'russian', '🇷🇺'),
+    (Locale('ar'), 'arabic', '🇸🇦'),
+    (Locale('zh'), 'chinese', '🇨🇳'),
+    (Locale('ja'), 'japanese', '🇯🇵'),
+    (Locale('ko'), 'korean', '🇰🇷'),
+    (Locale('nl'), 'dutch', '🇳🇱'),
+    (Locale('pl'), 'polish', '🇵🇱'),
+    (Locale('sv'), 'swedish', '🇸🇪'),
+    (Locale('el'), 'greek', '🇬🇷'),
+    (Locale('cs'), 'czech', '🇨🇿'),
+    (Locale('ro'), 'romanian', '🇷🇴'),
+    (Locale('uk'), 'ukrainian', '🇺🇦'),
+    (Locale('hi'), 'hindi', '🇮🇳'),
+    (Locale('id'), 'indonesian', '🇮🇩'),
+  ];
 
+  Widget _buildLanguageSelector(bool isDark, SettingsState settings) {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
@@ -424,8 +454,8 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         border: Border.all(color: isDark ? const Color(0xFF353534) : const Color(0xFFDDDDDD)),
       ),
       child: Column(
-        children: options.map((opt) {
-          final (locale, key, flag) = opt;
+        children: _allLocales.map((opt) {
+          final (locale, labelKey, flag) = opt;
           final selected = settings.locale.languageCode == locale.languageCode;
           return InkWell(
             onTap: () => ref.read(settingsProvider.notifier).setLocale(locale),
@@ -437,8 +467,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   Text(flag, style: const TextStyle(fontSize: 18)),
                   const SizedBox(width: 12),
                   Text(
-                    AppLocalizations.of(context).translate(key, fallback: key),
-                    style: TextStyle(fontSize: 14, color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666))),
+                    ref.tr(labelKey),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: selected ? const Color(0xFFE5E2E1) : (isDark ? const Color(0xFFBACBB6) : const Color(0xFF666666)),
+                    ),
                   ),
                   const Spacer(),
                   if (selected)

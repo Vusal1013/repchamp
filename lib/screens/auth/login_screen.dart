@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -46,6 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = ref.tr;
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
@@ -55,7 +58,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo
                 Container(
                   width: 80,
                   height: 80,
@@ -70,29 +72,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text(
+                const Text(
                   'REPCHAMP',
                   style: TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 36,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.01,
-                    color: const Color(0xFF6CFF80),
+                    color: Color(0xFF6CFF80),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'FITNESS DUEL',
-                  style: TextStyle(
+                  t('fitness_duel'),
+                  style: const TextStyle(
                     fontFamily: 'SpaceMono',
                     fontSize: 12,
                     letterSpacing: 4,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFFBACBB6),
+                    color: Color(0xFFBACBB6),
                   ),
                 ),
                 const SizedBox(height: 64),
-                // Email
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF201F1F),
@@ -102,17 +103,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: TextField(
                     controller: _emailController,
                     style: const TextStyle(color: Color(0xFFE5E2E1)),
-                    decoration: const InputDecoration(
-                      hintText: 'Email',
-                      hintStyle: TextStyle(color: Color(0xFF859581)),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: InputDecoration(
+                      hintText: t('email'),
+                      hintStyle: const TextStyle(color: Color(0xFF859581)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       border: InputBorder.none,
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Password
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF201F1F),
@@ -124,7 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: const TextStyle(color: Color(0xFFE5E2E1)),
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      hintText: 'Password',
+                      hintText: t('password'),
                       hintStyle: const TextStyle(color: Color(0xFF859581)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       border: InputBorder.none,
@@ -139,7 +139,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-                // Error
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -164,7 +163,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
                 const SizedBox(height: 32),
-                // Login button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -182,8 +180,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00390F)),
                           )
                         : Text(
-                            'LOGIN',
-                            style: TextStyle(
+                            t('login'),
+                            style: const TextStyle(
                               fontFamily: 'SpaceMono',
                               fontSize: 14,
                               letterSpacing: 3,
@@ -193,16 +191,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Signup link
                 TextButton(
                   onPressed: () => context.push('/signup'),
                   child: Text.rich(
                     TextSpan(
-                      text: "Don't have an account? ",
+                      text: t('dont_have_account'),
                       style: const TextStyle(color: Color(0xFFBACBB6), fontSize: 13),
                       children: [
                         TextSpan(
-                          text: 'Sign up',
+                          text: t('sign_up'),
                           style: const TextStyle(color: Color(0xFF6CFF80), fontWeight: FontWeight.w700),
                         ),
                       ],

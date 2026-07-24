@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../models/exercise_type.dart';
 import '../../providers/duel_matchmaking_provider.dart';
 import '../../providers/duel_provider.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 import '../../widgets/common/streak_badge.dart';
 
@@ -178,24 +180,24 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'FIND A DUEL',
-          style: TextStyle(
+          ref.tr('find_duel'),
+          style: const TextStyle(
             fontFamily: 'ArchivoNarrow',
             fontSize: 32,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.01,
-            color: const Color(0xFFE5E2E1),
+            color: Color(0xFFE5E2E1),
           ),
         ),
         const SizedBox(height: 16),
         Text(
-          'Challenge another player\nto a real-time fitness duel',
+          ref.tr('select_duel_hint'),
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'SpaceMono',
             fontSize: 12,
             letterSpacing: 1.2,
-            color: const Color(0xFFBACBB6),
+            color: Color(0xFFBACBB6),
           ),
         ),
         const SizedBox(height: 48),
@@ -224,19 +226,19 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'MATCHMAKING ACTIVE',
-          style: TextStyle(
+          ref.tr('matchmaking_active'),
+          style: const TextStyle(
             fontFamily: 'SpaceMono',
             fontSize: 12,
             letterSpacing: 3,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF568DFF),
+            color: Color(0xFF568DFF),
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'FINDING OPPONENT',
-          style: TextStyle(
+          ref.tr('finding_opponent'),
+          style: const TextStyle(
             fontFamily: 'ArchivoNarrow',
             fontSize: 32,
             fontWeight: FontWeight.w700,
@@ -349,19 +351,19 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'OPPONENT FOUND!',
-          style: TextStyle(
+          ref.tr('opponent_found_status'),
+          style: const TextStyle(
             fontFamily: 'SpaceMono',
             fontSize: 12,
             letterSpacing: 3,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF00E556),
+            color: Color(0xFF00E556),
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'MATCH READY',
-          style: TextStyle(
+          ref.tr('match_ready'),
+          style: const TextStyle(
             fontFamily: 'ArchivoNarrow',
             fontSize: 32,
             fontWeight: FontWeight.w700,
@@ -614,8 +616,8 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
           onPressed: _startMatchmaking,
           icon: const Icon(Icons.search_rounded, size: 20),
           label: Text(
-            'FIND MATCH',
-            style: TextStyle(
+            ref.tr('find_match'),
+            style: const TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 14,
               letterSpacing: 2,
@@ -642,7 +644,7 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
           onPressed: () => context.push('/duel/active', extra: {'soloMode': true}),
           icon: const Icon(Icons.person_outline_rounded, size: 20),
           label: Text(
-            'SOLO TEST',
+            ref.tr('solo_test_btn'),
             style: TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 14,
@@ -675,8 +677,8 @@ class _DuelLobbyScreenState extends ConsumerState<DuelLobbyScreen>
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: Text(
-            'CANCEL',
-            style: TextStyle(
+            ref.tr('cancel_search'),
+            style: const TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 14,
               letterSpacing: 2,

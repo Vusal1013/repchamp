@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../providers/localization_provider.dart';
 import '../../providers/streak_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../services/supabase/dashboard_service.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 import '../../widgets/common/streak_badge.dart';
@@ -17,6 +19,7 @@ class HomeScreen extends ConsumerWidget {
     final weeklyBreakdown = ref.watch(weeklyBreakdownProvider);
     final recentActivity = ref.watch(recentActivityProvider);
     final authUser = ref.watch(currentUserProvider);
+    final t = ref.tr;
 
     final username = authUser?.userMetadata?['username'] as String? ?? 'PLAYER_01';
 
@@ -32,15 +35,15 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildGreeting(username),
+                    _buildGreeting(username, ref),
                     const SizedBox(height: 24),
                     _buildStatsRow(dailyStats, ref),
                     const SizedBox(height: 24),
-                    _buildQuickActions(context),
+                    _buildQuickActions(context, ref),
                     const SizedBox(height: 24),
-                    _buildWeeklyProgress(weeklyBreakdown),
+                    _buildWeeklyProgress(weeklyBreakdown, ref),
                     const SizedBox(height: 24),
-                    _buildRecentActivity(recentActivity),
+                    _buildRecentActivity(recentActivity, ref),
                   ],
                 ),
               ),
@@ -82,29 +85,30 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildGreeting(String username) {
+  Widget _buildGreeting(String username, WidgetRef ref) {
+    final t = ref.tr;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'WELCOME BACK,',
-          style: TextStyle(
+          t('welcome_back_comma'),
+          style: const TextStyle(
             fontFamily: 'SpaceMono',
             fontSize: 12,
             letterSpacing: 3,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFFBACBB6),
+            color: Color(0xFFBACBB6),
           ),
         ),
         const SizedBox(height: 4),
         Text(
           username.toUpperCase(),
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'ArchivoNarrow',
             fontSize: 32,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.01,
-            color: const Color(0xFFE5E2E1),
+            color: Color(0xFFE5E2E1),
           ),
         ),
       ],
@@ -112,17 +116,18 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildStatsRow(AsyncValue<DailyStats?> dailyStatsAsync, WidgetRef ref) {
+    final t = ref.tr;
     final dailyStats = dailyStatsAsync.valueOrNull;
     final dailyReps = dailyStats?.totalReps ?? 0;
     final dailyXp = dailyStats?.totalXp ?? 0;
 
     return Row(
       children: [
-        Expanded(child: _statCard('DAILY REPS', '$dailyReps', const Color(0xFF6CFF80))),
+        Expanded(child: _statCard(t('daily_reps'), '$dailyReps', const Color(0xFF6CFF80))),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('XP TODAY', '$dailyXp', const Color(0xFF568DFF))),
+        Expanded(child: _statCard(t('xp_today'), '$dailyXp', const Color(0xFF568DFF))),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('STREAK', '${ref.watch(streakProvider)}🔥', const Color(0xFFFFB4AB))),
+        Expanded(child: _statCard(t('streak'), '${ref.watch(streakProvider)}🔥', const Color(0xFFFFB4AB))),
       ],
     );
   }
@@ -163,30 +168,31 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  Widget _buildQuickActions(BuildContext context, WidgetRef ref) {
+    final t = ref.tr;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
-            'QUICK ACTIONS',
-            style: TextStyle(
+            t('quick_actions'),
+            style: const TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
+              color: Color(0xFFE5E2E1),
             ),
           ),
         ),
         Row(
           children: [
-            Expanded(child: _actionCard('SOLO\nWORKOUT', Icons.person_rounded, 'Start training', () => context.push('/workout/select'))),
+            Expanded(child: _actionCard(t('solo_workout'), Icons.person_rounded, t('start_training'), () => context.push('/workout/select'))),
             const SizedBox(width: 12),
-            Expanded(child: _actionCard('QUICK\nDUEL', Icons.sports_kabaddi_rounded, 'Challenge', () => context.push('/duel/lobby'))),
+            Expanded(child: _actionCard(t('quick_duel'), Icons.sports_kabaddi_rounded, t('challenge_action'), () => context.push('/duel/lobby'))),
             const SizedBox(width: 12),
-            Expanded(child: _actionCard('CHALLENGES', Icons.emoji_events_rounded, 'Weekly', () => context.push('/challenges'))),
+            Expanded(child: _actionCard(t('challenges'), Icons.emoji_events_rounded, t('challenge_action'), () => context.push('/challenges'))),
           ],
         ),
       ],
@@ -240,7 +246,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWeeklyProgress(AsyncValue<WeeklyBreakdown> weeklyAsync) {
+  Widget _buildWeeklyProgress(AsyncValue<WeeklyBreakdown> weeklyAsync, WidgetRef ref) {
     final weekly = weeklyAsync.valueOrNull;
     final totalXp = weekly?.totalXp ?? 0;
     final dailyXp = weekly?.dailyXp ?? List.filled(7, 0);
@@ -260,22 +266,22 @@ class HomeScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'WEEKLY PROGRESS',
-                style: TextStyle(
+                ref.tr('weekly_progress'), // ignore: use_build_context_synchronously
+                style: const TextStyle(
                   fontFamily: 'SpaceMono',
                   fontSize: 12,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFFE5E2E1),
+                  color: Color(0xFFE5E2E1),
                 ),
               ),
               Text(
                 '+${_formatXp(totalXp)} XP',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SpaceMono',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6CFF80),
+                  color: Color(0xFF6CFF80),
                 ),
               ),
             ],
@@ -340,8 +346,9 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentActivity(AsyncValue<List<RecentActivityItem>> activityAsync) {
+  Widget _buildRecentActivity(AsyncValue<List<RecentActivityItem>> activityAsync, WidgetRef ref) {
     final activity = activityAsync.valueOrNull ?? [];
+    final t = ref.tr;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,13 +356,13 @@ class HomeScreen extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
-            'RECENT ACTIVITY',
-            style: TextStyle(
+            t('recent_activity'),
+            style: const TextStyle(
               fontFamily: 'SpaceMono',
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
+              color: Color(0xFFE5E2E1),
             ),
           ),
         ),
@@ -368,28 +375,28 @@ class HomeScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'No activity yet. Start your first workout!',
+              t('no_activity'),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
-                color: const Color(0xFFBACBB6),
+                color: Color(0xFFBACBB6),
               ),
             ),
           )
         else
           ...activity.map((item) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _activityItem(item),
+            child: _activityItem(item, ref),
           )),
       ],
     );
   }
 
-  Widget _activityItem(RecentActivityItem item) {
+  Widget _activityItem(RecentActivityItem item, WidgetRef ref) {
     final icon = _iconForExercise(item.exerciseType);
-    final title = _titleForExercise(item.exerciseType);
+    final title = _titleForExercise(item.exerciseType, ref);
     final timeStr = _timeAgo(item.createdAt);
-    final subtitle = '${item.repCount} reps · ${item.xpEarned} XP';
+    final subtitle = '${item.repCount} ${ref.tr('reps')} · ${item.xpEarned} XP';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -465,22 +472,22 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  String _titleForExercise(String type) {
+  String _titleForExercise(String type, WidgetRef ref) {
     switch (type) {
       case 'push_up':
-        return 'Push-up';
+        return ref.tr('push_up');
       case 'squat':
-        return 'Squat';
+        return ref.tr('squat');
       case 'crunch':
-        return 'Crunch';
+        return ref.tr('crunch');
       case 'pull_up':
-        return 'Pull-up';
+        return ref.tr('pull_up');
       case 'plank':
-        return 'Plank';
+        return ref.tr('plank');
       case 'lunge':
-        return 'Lunge';
+        return ref.tr('lunge');
       case 'shoulder_press':
-        return 'Shoulder Press';
+        return ref.tr('shoulder_press');
       default:
         return type;
     }

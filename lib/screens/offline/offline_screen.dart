@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 
-class OfflineScreen extends StatefulWidget {
+class OfflineScreen extends ConsumerStatefulWidget {
   final Widget child;
   const OfflineScreen({super.key, required this.child});
 
   @override
-  State<OfflineScreen> createState() => _OfflineScreenState();
+  ConsumerState<OfflineScreen> createState() => _OfflineScreenState();
 }
 
-class _OfflineScreenState extends State<OfflineScreen> {
+class _OfflineScreenState extends ConsumerState<OfflineScreen> {
   bool _isOffline = false;
   Timer? _timer;
 
@@ -39,6 +42,7 @@ class _OfflineScreenState extends State<OfflineScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isOffline) {
+      final t = ref.tr;
       return Scaffold(
         backgroundColor: const Color(0xFF131313),
         body: Center(
@@ -57,9 +61,9 @@ class _OfflineScreenState extends State<OfflineScreen> {
                   child: const Icon(Icons.wifi_off_rounded, color: Color(0xFFBACBB6), size: 48),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'NO CONNECTION',
-                  style: TextStyle(
+                Text(
+                  t('no_connection'),
+                  style: const TextStyle(
                     fontSize: 20,
                     letterSpacing: 3,
                     fontWeight: FontWeight.w700,
@@ -67,10 +71,10 @@ class _OfflineScreenState extends State<OfflineScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Check your internet connection\nand try again',
+                Text(
+                  t('check_internet'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFFBACBB6),
                     height: 1.4,
@@ -87,9 +91,9 @@ class _OfflineScreenState extends State<OfflineScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text(
-                      'RETRY',
-                      style: TextStyle(
+                    child: Text(
+                      t('retry'),
+                      style: const TextStyle(
                         fontSize: 14,
                         letterSpacing: 3,
                         fontWeight: FontWeight.w700,

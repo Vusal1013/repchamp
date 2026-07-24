@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/exercise_type.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 import '../../widgets/common/streak_badge.dart';
 
-class ExerciseSelectScreen extends StatelessWidget {
+class ExerciseSelectScreen extends ConsumerWidget {
   final bool isDuel;
 
   const ExerciseSelectScreen({super.key, this.isDuel = false});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
@@ -24,25 +27,25 @@ class ExerciseSelectScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isDuel ? 'CHOOSE YOUR DUEL' : 'CHOOSE EXERCISE',
-                      style: TextStyle(
+                      isDuel ? ref.tr('choose_duel') : ref.tr('choose_exercise'),
+                      style: const TextStyle(
                         fontFamily: 'ArchivoNarrow',
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -0.01,
-                        color: const Color(0xFFE5E2E1),
+                        color: Color(0xFFE5E2E1),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       isDuel
-                          ? 'Select an exercise to challenge your opponent'
-                          : 'Pick an exercise to start your workout',
-                      style: TextStyle(
+                          ? ref.tr('choose_duel_hint')
+                          : ref.tr('pick_exercise_hint'),
+                      style: const TextStyle(
                         fontFamily: 'SpaceMono',
                         fontSize: 12,
                         letterSpacing: 1.2,
-                        color: const Color(0xFFBACBB6),
+                        color: Color(0xFFBACBB6),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -59,6 +62,7 @@ class ExerciseSelectScreen extends StatelessWidget {
                           context,
                           ExerciseType.values[i],
                           isDuel,
+                          ref,
                         ),
                       ),
                     ),
@@ -90,7 +94,7 @@ class ExerciseSelectScreen extends StatelessWidget {
     );
   }
 
-  Widget _exerciseCard(BuildContext context, ExerciseType type, bool isDuel) {
+  Widget _exerciseCard(BuildContext context, ExerciseType type, bool isDuel, WidgetRef ref) {
     return GestureDetector(
       onTap: () {
         if (isDuel) {
@@ -127,11 +131,11 @@ class ExerciseSelectScreen extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              type.isTimeBased ? 'HOLD' : 'REPS',
-              style: TextStyle(
+              type.isTimeBased ? ref.tr('hold') : ref.tr('reps_label'),
+              style: const TextStyle(
                 fontSize: 10,
                 letterSpacing: 2,
-                color: const Color(0xFFBACBB6),
+                color: Color(0xFFBACBB6),
               ),
             ),
           ],

@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/user_profile_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/localization_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../providers/profile_stats_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../services/supabase/profile_stats_service.dart';
 import '../../services/supabase/dashboard_service.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
@@ -23,6 +25,7 @@ class ProfileScreen extends ConsumerWidget {
     final recentDuelsAsync = ref.watch(recentDuelsProvider);
     final achievementsAsync = ref.watch(achievementsProvider);
     final weeklyAsync = ref.watch(weeklyBreakdownProvider);
+    final t = ref.tr;
 
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
@@ -38,7 +41,7 @@ class ProfileScreen extends ConsumerWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Profile not found',
+                          Text(t('profile_not_found_text'),
                               style: TextStyle(color: Color(0xFFFFB4AB))),
                           SizedBox(height: 8),
                           Text(authUser?.email ?? '',
@@ -49,13 +52,13 @@ class ProfileScreen extends ConsumerWidget {
                   }
                   return _buildBody(profile, authUser?.email ?? '',
                       duelStatsAsync, totalRepsAsync, recentDuelsAsync,
-                      achievementsAsync, weeklyAsync);
+                      achievementsAsync, weeklyAsync, ref);
                 },
                 loading: () => const Center(
                   child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
                 ),
                 error: (err, _) => Center(
-                  child: Text('Failed to load profile',
+                  child: Text(t('failed_load_profile_text'),
                       style: TextStyle(color: Color(0xFFFFB4AB))),
                 ),
               ),
@@ -105,6 +108,7 @@ class ProfileScreen extends ConsumerWidget {
     AsyncValue<List<RecentDuelItem>> recentDuelsAsync,
     AsyncValue<List<AchievementInfo>> achievementsAsync,
     AsyncValue<WeeklyBreakdown> weeklyAsync,
+    WidgetRef ref,
   ) {
     final duelStats = duelStatsAsync.asData?.value;
     final totalReps = totalRepsAsync.asData?.value ?? 0;
@@ -116,21 +120,21 @@ class ProfileScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
         children: [
-          _buildHeroSection(profile, email),
+          _buildHeroSection(profile, email, ref),
           const SizedBox(height: 16),
-          _buildStatsGrid(duelStats, totalReps),
+          _buildStatsGrid(duelStats, totalReps, ref),
           const SizedBox(height: 16),
-          _buildXpChart(weekly),
+          _buildXpChart(weekly, ref),
           const SizedBox(height: 16),
-          _buildAchievements(achievements),
+          _buildAchievements(achievements, ref),
           const SizedBox(height: 16),
-          _buildRecentDuels(recentDuels),
+          _buildRecentDuels(recentDuels, ref),
         ],
       ),
     );
   }
 
-  Widget _buildHeroSection(UserProfile profile, String email) {
+  Widget _buildHeroSection(UserProfile profile, String email, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -169,11 +173,11 @@ class ProfileScreen extends ConsumerWidget {
                     border: Border.all(color: const Color(0xFF131313), width: 2),
                   ),
                   child: Text(
-                    'LVL ${profile.level}',
-                    style: TextStyle(
+                    ref.tr('lvl_num').replaceAll('{level}', '${profile.level}'),
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF00390F),
+                      color: Color(0xFF00390F),
                     ),
                   ),
                 ),
@@ -183,18 +187,18 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           Text(
             '@${profile.username}',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
+              color: Color(0xFFE5E2E1),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             email,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
-              color: const Color(0xFFBACBB6),
+              color: Color(0xFFBACBB6),
             ),
           ),
           const SizedBox(height: 8),
@@ -206,12 +210,12 @@ class ProfileScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              'PRO MEMBER',
-              style: TextStyle(
+              ref.tr('pro_member'),
+              style: const TextStyle(
                 fontSize: 12,
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF6CFF80),
+                color: Color(0xFF6CFF80),
               ),
             ),
           ),
@@ -220,7 +224,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsGrid(DuelStats? duelStats, int totalReps) {
+  Widget _buildStatsGrid(DuelStats? duelStats, int totalReps, WidgetRef ref) {
     final wins = duelStats?.wins ?? 0;
     final winRate = duelStats?.winRate ?? 0;
 
@@ -228,18 +232,18 @@ class ProfileScreen extends ConsumerWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _buildWinRateCard(winRate)),
+            Expanded(child: _buildWinRateCard(winRate, ref)),
             const SizedBox(width: 16),
-            Expanded(child: _buildDuelsWonCard(wins)),
+            Expanded(child: _buildDuelsWonCard(wins, ref)),
           ],
         ),
         const SizedBox(height: 16),
-        _buildTotalRepsCard(totalReps),
+        _buildTotalRepsCard(totalReps, ref),
       ],
     );
   }
 
-  Widget _buildWinRateCard(double winRate) {
+  Widget _buildWinRateCard(double winRate, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -250,22 +254,22 @@ class ProfileScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'WIN RATE',
-            style: TextStyle(
+            ref.tr('win_rate'),
+            style: const TextStyle(
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFBACBB6),
+              color: Color(0xFFBACBB6),
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            '${winRate.toStringAsFixed(0)}%',
-            style: TextStyle(
+            ref.tr('win_rate_value').replaceAll('{rate}', winRate.toStringAsFixed(0)),
+            style: const TextStyle(
               fontSize: 36,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.04,
-              color: const Color(0xFF6CFF80),
+              color: Color(0xFF6CFF80),
             ),
           ),
           const SizedBox(height: 12),
@@ -296,7 +300,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDuelsWonCard(int wins) {
+  Widget _buildDuelsWonCard(int wins, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -307,21 +311,21 @@ class ProfileScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'DUELS WON',
-            style: TextStyle(
+            ref.tr('duels_won'),
+            style: const TextStyle(
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFBACBB6),
+              color: Color(0xFFBACBB6),
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            '$wins',
-            style: TextStyle(
+            ref.tr('duels_won_count').replaceAll('{count}', '$wins'),
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFFE5E2E1),
+              color: Color(0xFFE5E2E1),
             ),
           ),
         ],
@@ -329,7 +333,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTotalRepsCard(int totalReps) {
+  Widget _buildTotalRepsCard(int totalReps, WidgetRef ref) {
     final display = totalReps >= 1000
         ? '${(totalReps / 1000).toStringAsFixed(1)}K'
         : '$totalReps';
@@ -346,21 +350,21 @@ class ProfileScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'TOTAL REPS',
-                style: TextStyle(
+                ref.tr('total_reps'),
+                style: const TextStyle(
                   fontSize: 12,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFFBACBB6),
+                  color: Color(0xFFBACBB6),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 display,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFFE5E2E1),
+                  color: Color(0xFFE5E2E1),
                 ),
               ),
             ],
@@ -372,7 +376,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildXpChart(WeeklyBreakdown? weekly) {
+  Widget _buildXpChart(WeeklyBreakdown? weekly, WidgetRef ref) {
     final dailyXp = weekly?.dailyXp ?? [0, 0, 0, 0, 0, 0, 0];
     final totalWeekly = weekly?.totalXp ?? 0;
     final maxDay = dailyXp.reduce((a, b) => a > b ? a : b);
@@ -389,20 +393,20 @@ class ProfileScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'WEEKLY XP PROGRESS',
-                style: TextStyle(
+                ref.tr('weekly_progress'),
+                style: const TextStyle(
                   fontSize: 12,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFFE5E2E1),
+                  color: Color(0xFFE5E2E1),
                 ),
               ),
               Text(
                 '+$totalWeekly XP',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6CFF80),
+                  color: Color(0xFF6CFF80),
                 ),
               ),
             ],
@@ -460,7 +464,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAchievements(List<AchievementInfo> achievements) {
+  Widget _buildAchievements(List<AchievementInfo> achievements, WidgetRef ref) {
     if (achievements.isEmpty) return const SizedBox.shrink();
     final unlocked = achievements.where((a) => a.unlocked).toList();
 
@@ -469,28 +473,28 @@ class ProfileScreen extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
-          child: Row(
-            children: [
-              Text(
-                'ACHIEVEMENTS',
-                style: TextStyle(
-                  fontSize: 12,
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFE5E2E1),
+            child: Row(
+              children: [
+                Text(
+                  ref.tr('achievements'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE5E2E1),
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                '${unlocked.length}/${achievements.length}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF6CFF80),
+                const Spacer(),
+                Text(
+                  ref.tr('achievements_count').replaceAll('{unlocked}', '${unlocked.length}').replaceAll('{total}', '${achievements.length}'),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6CFF80),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ),
         SizedBox(
           height: 100,
@@ -563,7 +567,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentDuels(List<RecentDuelItem> duels) {
+  Widget _buildRecentDuels(List<RecentDuelItem> duels, WidgetRef ref) {
     if (duels.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -572,24 +576,24 @@ class ProfileScreen extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
-            'RECENT DUELS',
-            style: TextStyle(
+            ref.tr('recent_duels'),
+            style: const TextStyle(
               fontSize: 12,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFFE5E2E1),
+              color: Color(0xFFE5E2E1),
             ),
           ),
         ),
         ...duels.map((d) => Padding(
           padding: const EdgeInsets.only(bottom: 4),
-          child: _duelItem(d),
+          child: _duelItem(d, ref),
         )),
       ],
     );
   }
 
-  Widget _duelItem(RecentDuelItem duel) {
+  Widget _duelItem(RecentDuelItem duel, WidgetRef ref) {
     final xpText = duel.won ? '+50 XP' : '-20 XP';
     return Container(
       padding: const EdgeInsets.all(16),
@@ -628,7 +632,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  '${_exerciseLabel(duel.exerciseType)} • ${duel.timeAgo}',
+                  '${_exerciseLabel(duel.exerciseType, ref)} • ${duel.timeAgo}',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -671,15 +675,15 @@ class ProfileScreen extends ConsumerWidget {
     }
   }
 
-  String _exerciseLabel(String type) {
+  String _exerciseLabel(String type, WidgetRef ref) {
     switch (type) {
-      case 'push_up': return 'Pushup Duel';
-      case 'squat': return 'Squat Duel';
-      case 'crunch': return 'Crunch Duel';
-      case 'pull_up': return 'Pull-up Duel';
-      case 'plank': return 'Plank Duel';
-      case 'lunge': return 'Lunge Duel';
-      case 'shoulder_press': return 'Shoulder Press Duel';
+      case 'push_up': return '${ref.tr('push_up')} Duel';
+      case 'squat': return '${ref.tr('squat')} Duel';
+      case 'crunch': return '${ref.tr('crunch')} Duel';
+      case 'pull_up': return '${ref.tr('pull_up')} Duel';
+      case 'plank': return '${ref.tr('plank')} Duel';
+      case 'lunge': return '${ref.tr('lunge')} Duel';
+      case 'shoulder_press': return '${ref.tr('shoulder_press')} Duel';
       default: return 'Duel';
     }
   }

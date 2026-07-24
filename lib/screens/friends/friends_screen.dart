@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/friend_model.dart';
 import '../../providers/friend_provider.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../widgets/common/fit_duel_bottom_nav.dart';
 
 class FriendsScreen extends ConsumerStatefulWidget {
@@ -51,13 +53,13 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       child: Row(
         children: [
           Text(
-            'FRIENDS',
-            style: TextStyle(
+            ref.tr('friends_title'),
+            style: const TextStyle(
               fontFamily: 'ArchivoNarrow',
               fontSize: 28,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.01,
-              color: const Color(0xFF6CFF80),
+              color: Color(0xFF6CFF80),
             ),
           ),
         ],
@@ -66,7 +68,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   }
 
   Widget _buildTabs() {
-    final labels = ['FRIENDS', 'REQUESTS', 'ADD'];
+    final labels = [ref.tr('friends_title'), ref.tr('pending_requests'), ref.tr('add_friend')];
     return Container(
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(4),
@@ -114,16 +116,16 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
 
   Widget _buildFriendsList(List<FriendRelation> friends) {
     if (friends.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.people_outline_rounded, size: 64, color: Color(0xFF353534)),
-            SizedBox(height: 16),
-            Text('No friends yet',
-              style: TextStyle(color: Color(0xFFBACBB6), fontSize: 16)),
-            SizedBox(height: 8),
-            Text('Add friends to compare progress',
+            const Icon(Icons.people_outline_rounded, size: 64, color: Color(0xFF353534)),
+            const SizedBox(height: 16),
+            Text(ref.tr('no_friends'),
+              style: const TextStyle(color: Color(0xFFBACBB6), fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(ref.tr('add_friends_to_compare'),
               style: TextStyle(color: Color(0xFF859581), fontSize: 12)),
           ],
         ),
@@ -139,14 +141,14 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
 
   Widget _buildPendingRequests(List<FriendRequest> requests) {
     if (requests.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.inbox_rounded, size: 64, color: Color(0xFF353534)),
-            SizedBox(height: 16),
-            Text('No pending requests',
-              style: TextStyle(color: Color(0xFFBACBB6), fontSize: 16)),
+            const Icon(Icons.inbox_rounded, size: 64, color: Color(0xFF353534)),
+            const SizedBox(height: 16),
+            Text(ref.tr('no_pending_requests'),
+              style: const TextStyle(color: Color(0xFFBACBB6), fontSize: 16)),
           ],
         ),
       );
@@ -172,11 +174,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
             ),
             child: TextField(
               style: const TextStyle(color: Color(0xFFE5E2E1)),
-              decoration: const InputDecoration(
-                hintText: 'Search by username...',
-                hintStyle: TextStyle(color: Color(0xFF859581)),
-                prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF859581)),
-                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: InputDecoration(
+                hintText: ref.tr('search_by_username'),
+                hintStyle: const TextStyle(color: Color(0xFF859581)),
+                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF859581)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 border: InputBorder.none,
               ),
               onChanged: (query) {

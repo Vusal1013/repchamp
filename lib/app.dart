@@ -3,7 +3,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/settings_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -100,9 +99,15 @@ class RepChampApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
       locale: settings.locale,
-      supportedLocales: AppLocalizations.supportedLocales,
-      localizationsDelegates: [
-        AppLocalizations.delegate,
+      supportedLocales: const [
+        Locale('en'), Locale('tr'), Locale('az'), Locale('ar'),
+        Locale('cs'), Locale('de'), Locale('el'), Locale('es'),
+        Locale('fr'), Locale('hi'), Locale('id'), Locale('it'),
+        Locale('ja'), Locale('ko'), Locale('nl'), Locale('pl'),
+        Locale('pt'), Locale('ro'), Locale('ru'), Locale('sv'),
+        Locale('uk'), Locale('zh'),
+      ],
+      localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

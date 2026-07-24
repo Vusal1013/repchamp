@@ -1,17 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../widgets/common/primary_button.dart';
 
-class WorkoutSummaryScreen extends StatefulWidget {
+class WorkoutSummaryScreen extends ConsumerStatefulWidget {
   const WorkoutSummaryScreen({super.key});
 
   @override
-  State<WorkoutSummaryScreen> createState() => _WorkoutSummaryScreenState();
+  ConsumerState<WorkoutSummaryScreen> createState() => _WorkoutSummaryScreenState();
 }
 
-class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen>
+class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeIn;
@@ -108,10 +111,10 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen>
                     position: _slideUp,
                     child: FadeTransition(
                       opacity: _fadeIn,
-                      child: const Text(
-                        'WORKOUT\nCOMPLETE',
+                      child: Text(
+                        ref.tr('workout_complete'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -152,9 +155,9 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen>
                     position: _slideUp,
                     child: FadeTransition(
                       opacity: _fadeIn,
-                      child: const Text(
-                        'TOTAL REPS',
-                        style: TextStyle(
+                      child: Text(
+                        ref.tr('total_reps'),
+                        style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
                           letterSpacing: 4,
@@ -179,9 +182,9 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen>
                           children: [
                             Icon(Icons.favorite_rounded, color: AppColors.accent, size: 16),
                             const SizedBox(width: 8),
-                            const Text(
-                              'Form Accuracy: 98%',
-                              style: TextStyle(
+                            Text(
+                              ref.tr('form_accuracy'),
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: AppColors.accent,
                                 fontWeight: FontWeight.w500,
@@ -198,7 +201,7 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen>
                     child: FadeTransition(
                       opacity: _fadeIn,
                       child: PrimaryButton(
-                        label: 'BACK TO HOME',
+                        label: ref.tr('back_home'),
                         onPressed: () => context.go('/home'),
                       ),
                     ),

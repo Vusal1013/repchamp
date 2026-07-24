@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/duel_provider.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 import '../../services/supabase/leaderboard_service.dart';
 import '../../services/supabase/dashboard_service.dart';
 import '../../services/supabase/supabase_client.dart';
@@ -70,7 +72,18 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: _buildBody(leaderboard, userRank, friendLeaderboard, weeklyBreakdown),
+              child: leaderboard.when(
+                data: (entries) => _buildBody(entries, userRank.valueOrNull, ref),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF6CFF80)),
+                ),
+                error: (_, __) => Center(
+                  child: Text(
+                    ref.tr('failed_to_load'),
+                    style: const TextStyle(color: Color(0xFFFFB4AB)),
+                  ),
+                ),
+              ),
             ),
             const FitDuelBottomNav(activeTab: NavTab.leaderboard),
           ],
@@ -96,40 +109,37 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _buildBody(
-    AsyncValue<List<LeaderboardEntry>> leaderboard,
-    AsyncValue<UserRankInfo?> userRank,
-    AsyncValue<List<LeaderboardEntry>> friendLeaderboard,
-    AsyncValue<WeeklyBreakdown> weeklyBreakdown,
-  ) {
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
-          child: Column(
-            children: [
-              _buildTabs(),
-              const SizedBox(height: 32),
-              if (_selectedTab == 0)
-                _buildGlobalContent(leaderboard)
-              else if (_selectedTab == 1)
-                _buildFriendsContent(friendLeaderboard)
-              else
-                _buildWeeklyContent(weeklyBreakdown),
-            ],
+  Widget _buildBody(List<LeaderboardEntry> entries, UserRankInfo? rankInfo, WidgetRef ref) {
+    if (_selectedTab == 0) {
+      return Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
+            child: Column(
+              children: [
+                _buildTabs(ref),
+                const SizedBox(height: 32),
+                _buildPodium(entries),
+                const SizedBox(height: 32),
+                _buildRankedList(entries, ref),
+              ],
+            ),
           ),
-        ),
-        if (_selectedTab == 0)
           Positioned(
             bottom: 0, left: 0, right: 0,
-            child: _buildUserFooter(userRank.valueOrNull),
+            child: _buildUserFooter(rankInfo, ref),
           ),
-      ],
-    );
+        ],
+      );
+    } else if (_selectedTab == 1) {
+      return _buildFriendsContent(friendLeaderboard, ref);
+    } else {
+      return _buildWeeklyContent(weeklyBreakdown, ref);
+    }
   }
 
-  Widget _buildTabs() {
-    final labels = ['GLOBAL', 'FRIENDS', 'WEEKLY'];
+  Widget _buildTabs(WidgetRef ref) {
+    final labels = [ref.tr('global'), ref.tr('friends'), ref.tr('weekly')];
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -167,21 +177,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _buildGlobalContent(AsyncValue<List<LeaderboardEntry>> leaderboard) {
-    return leaderboard.when(
-      data: (entries) => Column(
-        children: [
-          _buildPodium(entries),
-          const SizedBox(height: 32),
-          _buildRankedList(entries),
-        ],
-      ),
-      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
-      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
-    );
-  }
-
-  Widget _buildFriendsContent(AsyncValue<List<LeaderboardEntry>> friendLeaderboard) {
+  Widget _buildFriendsContent(AsyncValue<List<LeaderboardEntry>> friendLeaderboard, WidgetRef ref) {
     return friendLeaderboard.when(
       data: (entries) {
         if (entries.isEmpty) {
@@ -191,9 +187,9 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
               children: [
                 Icon(Icons.people_outline_rounded, size: 64, color: const Color(0xFF353534)),
                 const SizedBox(height: 16),
-                Text('NO FRIENDS YET', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                Text(ref.tr('no_friends_yet'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
                 const SizedBox(height: 8),
-                Text('Add friends to see them here', style: TextStyle(fontSize: 12, color: const Color(0xFF859581))),
+                Text(ref.tr('add_friends_hint'), style: TextStyle(fontSize: 12, color: const Color(0xFF859581))),
               ],
             ),
           );
@@ -201,11 +197,11 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
         return _buildFriendList(entries);
       },
       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
-      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
+      error: (_, __) => Text(ref.tr('failed_to_load'), style: const TextStyle(color: Color(0xFFFFB4AB))),
     );
   }
 
-  Widget _buildWeeklyContent(AsyncValue<WeeklyBreakdown> weeklyBreakdown) {
+  Widget _buildWeeklyContent(AsyncValue<WeeklyBreakdown> weeklyBreakdown, WidgetRef ref) {
     return weeklyBreakdown.when(
       data: (weekly) {
         final dailyXp = weekly.dailyXp;
@@ -219,10 +215,10 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             Center(
               child: Column(
                 children: [
-                  Text('WEEKLY XP', style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                  Text(ref.tr('weekly_xp'), style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
                   const SizedBox(height: 4),
                   Text('+$total', style: TextStyle(fontSize: 48, fontWeight: FontWeight.w700, color: const Color(0xFF6CFF80))),
-                  Text('XP THIS WEEK', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
+                  Text(ref.tr('xp_this_week'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6))),
                 ],
               ),
             ),
@@ -262,49 +258,52 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6CFF80))),
-      error: (_, __) => const Text('Failed to load', style: TextStyle(color: Color(0xFFFFB4AB))),
+      error: (_, __) => Text(ref.tr('failed_to_load'), style: const TextStyle(color: Color(0xFFFFB4AB))),
     );
   }
 
   Widget _buildFriendList(List<LeaderboardEntry> entries) {
-    return Column(
-      children: List.generate(entries.length, (i) {
-        final entry = entries[i];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(8),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Text(
-                '${i + 1}',
-                style: TextStyle(fontFamily: 'SpaceMono', fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6)),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF353534))),
-                child: const Icon(Icons.person, size: 22, color: Color(0xFFBACBB6)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(entry.username, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE5E2E1))),
-                    const SizedBox(height: 2),
-                    Text('LEVEL ${entry.level}', style: TextStyle(fontSize: 10, color: const Color(0xFFBACBB6))),
-                  ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      child: Column(
+        children: List.generate(entries.length, (i) {
+          final entry = entries[i];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(8),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  '${i + 1}',
+                  style: TextStyle(fontFamily: 'SpaceMono', fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFBACBB6)),
                 ),
-              ),
-              Text(_formatReps(entry.totalReps), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF6CFF80))),
-            ],
-          ),
-        );
-      }),
+                const SizedBox(width: 16),
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF353534))),
+                  child: const Icon(Icons.person, size: 22, color: Color(0xFFBACBB6)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.username, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE5E2E1))),
+                      const SizedBox(height: 2),
+                      Text('LEVEL ${entry.level}', style: TextStyle(fontSize: 10, color: const Color(0xFFBACBB6))),
+                    ],
+                  ),
+                ),
+                Text(_formatReps(entry.totalReps), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF6CFF80))),
+              ],
+            ),
+          );
+        }),
+      ),
     );
   }
 
@@ -367,7 +366,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _buildRankedList(List<LeaderboardEntry> entries) {
+  Widget _buildRankedList(List<LeaderboardEntry> entries, WidgetRef ref) {
     final listEntries = entries.length > 3 ? entries.sublist(3) : <LeaderboardEntry>[];
 
     return Column(
@@ -398,7 +397,10 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                   children: [
                     Text(entry.username, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFE5E2E1))),
                     const SizedBox(height: 2),
-                    Text('${_formatReps(entry.totalReps)} REPS', style: TextStyle(fontSize: 10, color: const Color(0xFFBACBB6))),
+                    Text(
+                      '${_formatReps(entry.totalReps)} ${ref.tr('reps_label')}',
+                      style: const TextStyle(fontSize: 10, color: Color(0xFFBACBB6)),
+                    ),
                   ],
                 ),
               ),
@@ -416,7 +418,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _buildUserFooter(UserRankInfo? rankInfo) {
+  Widget _buildUserFooter(UserRankInfo? rankInfo, WidgetRef ref) {
     final rank = rankInfo?.rank ?? 0;
     final totalCount = rankInfo?.totalCount ?? 1;
     final totalXp = rankInfo?.totalXp ?? 0;
@@ -444,16 +446,48 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('YOU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF00390F))),
-                Text('TOP $topPercent% | $weeklyXp XP THIS WEEK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF00390F).withAlpha(204))),
+                Text(
+                  ref.tr('you_label'),
+                  style: const TextStyle(
+                    fontFamily: 'SpaceMono',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF00390F),
+                  ),
+                ),
+                Text(
+                  '${ref.tr('top_percent').replaceAll('{percent}', '$topPercent')} | ${ref.tr('this_week_xp').replaceAll('{xp}', '$weeklyXp')}',
+                  style: TextStyle(
+                    fontFamily: 'SpaceMono',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF00390F).withAlpha(204),
+                  ),
+                ),
               ],
             ),
             const Spacer(),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(_formatXp(totalXp), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: const Color(0xFF00390F))),
-                Text('TOTAL XP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF00390F).withAlpha(204))),
+                Text(
+                  _formatXp(totalXp),
+                  style: TextStyle(
+                    fontFamily: 'ArchivoNarrow',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF00390F),
+                  ),
+                ),
+                Text(
+                  ref.tr('total_xp_label'),
+                  style: const TextStyle(
+                    fontFamily: 'SpaceMono',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xCC00390F),
+                  ),
+                ),
               ],
             ),
           ],

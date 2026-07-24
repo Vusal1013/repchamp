@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/localization_provider.dart';
+import '../../services/local/translations_ext.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -28,7 +30,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   Future<void> _signup() async {
     if (_usernameController.text.trim().isEmpty) {
-      setState(() => _error = 'Username is required');
+      setState(() => _error = ref.tr('username_required'));
       return;
     }
 
@@ -54,6 +56,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = ref.tr;
     return Scaffold(
       backgroundColor: const Color(0xFF131313),
       body: SafeArea(
@@ -64,28 +67,27 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'CREATE ACCOUNT',
-                  style: TextStyle(
+                  t('create_account'),
+                  style: const TextStyle(
                     fontFamily: 'ArchivoNarrow',
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.01,
-                    color: const Color(0xFFE5E2E1),
+                    color: Color(0xFFE5E2E1),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'JOIN THE ARENA',
-                  style: TextStyle(
+                  t('join_arena'),
+                  style: const TextStyle(
                     fontFamily: 'SpaceMono',
                     fontSize: 12,
                     letterSpacing: 4,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFFBACBB6),
+                    color: Color(0xFFBACBB6),
                   ),
                 ),
                 const SizedBox(height: 48),
-                // Username
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF201F1F),
@@ -95,16 +97,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   child: TextField(
                     controller: _usernameController,
                     style: const TextStyle(color: Color(0xFFE5E2E1)),
-                    decoration: const InputDecoration(
-                      hintText: 'Username',
-                      hintStyle: TextStyle(color: Color(0xFF859581)),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: InputDecoration(
+                      hintText: t('username'),
+                      hintStyle: const TextStyle(color: Color(0xFF859581)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       border: InputBorder.none,
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Email
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF201F1F),
@@ -114,17 +115,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   child: TextField(
                     controller: _emailController,
                     style: const TextStyle(color: Color(0xFFE5E2E1)),
-                    decoration: const InputDecoration(
-                      hintText: 'Email',
-                      hintStyle: TextStyle(color: Color(0xFF859581)),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: InputDecoration(
+                      hintText: t('email'),
+                      hintStyle: const TextStyle(color: Color(0xFF859581)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       border: InputBorder.none,
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Password
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF201F1F),
@@ -136,7 +136,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     style: const TextStyle(color: Color(0xFFE5E2E1)),
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      hintText: 'Password',
+                      hintText: t('password'),
                       hintStyle: const TextStyle(color: Color(0xFF859581)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       border: InputBorder.none,
@@ -151,7 +151,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ),
                 ),
-                // Error
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -176,7 +175,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ],
                 const SizedBox(height: 32),
-                // Signup button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -194,8 +192,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00390F)),
                           )
                         : Text(
-                            'SIGN UP',
-                            style: TextStyle(
+                            t('sign_up'),
+                            style: const TextStyle(
                               fontFamily: 'SpaceMono',
                               fontSize: 14,
                               letterSpacing: 3,
@@ -205,16 +203,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Login link
                 TextButton(
                   onPressed: () => context.pop(),
                   child: Text.rich(
                     TextSpan(
-                      text: 'Already have an account? ',
+                      text: t('already_have_account'),
                       style: const TextStyle(color: Color(0xFFBACBB6), fontSize: 13),
                       children: [
                         TextSpan(
-                          text: 'Login',
+                          text: t('login'),
                           style: const TextStyle(color: Color(0xFF6CFF80), fontWeight: FontWeight.w700),
                         ),
                       ],
